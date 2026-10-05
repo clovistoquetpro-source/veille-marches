@@ -61,11 +61,23 @@ create table imports (
   message   text
 );
 
+create index marches_acheteur_cpv_idx on marches (acheteur_siret, left(cpv, 5), date_notification);
+
 -- Marchés de services et fournitures qui arrivent à échéance dans les 12 prochains mois.
+-- `deja_relance_le` : date du dernier marché du même acheteur et de la même classe CPV notifié dans
+-- les 18 mois qui précèdent la fin, signe que la relance a probablement déjà eu lieu.
 create view renouvellements as
 select
   m.*,
-  (m.date_fin_estimee - current_date) as jours_restants
+  (m.date_fin_estimee - current_date) as jours_restants,
+  (
+    select max(n.date_notification)
+    from marches n
+    where n.acheteur_siret = m.acheteur_siret
+      and left(n.cpv, 5) = left(m.cpv, 5)
+      and n.date_notification > m.date_notification + interval '1 month'
+      and n.date_notification >= m.date_fin_estimee - interval '18 months'
+  ) as deja_relance_le
 from marches m
 where m.renouvelable
   and m.date_fin_estimee between current_date and current_date + interval '12 months';

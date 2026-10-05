@@ -12,6 +12,8 @@ export type Renouvellement = {
   duree_mois: number;
   offres_recues: number | null;
   titulaires: string[];
+  /** Un marché similaire du même acheteur a été notifié depuis : la relance a sans doute déjà eu lieu. */
+  deja_relance_le: string | null;
 };
 
 export type FiltresRenouvellements = {
@@ -30,8 +32,8 @@ export async function listerRenouvellements(
   return sql<Renouvellement[]>`
     select r.uid, r.objet, r.acheteur_siret as acheteur, a.nom as acheteur_nom, r.famille, r.cpv,
       r.montant::float as montant, r.date_fin_estimee::text as date_fin_estimee, r.duree_mois,
-      r.offres_recues,
-      coalesce(array_agg(t.titulaire_id order by t.titulaire_id) filter (where t.titulaire_id is not null), '{}') as titulaires
+      r.offres_recues, r.deja_relance_le::text as deja_relance_le,
+      coalesce(json_agg(t.titulaire_id order by t.titulaire_id) filter (where t.titulaire_id is not null), '[]') as titulaires
     from renouvellements r
     left join acheteurs a on a.siret = r.acheteur_siret
     left join marches_titulaires t on t.marche_uid = r.uid
@@ -39,7 +41,7 @@ export async function listerRenouvellements(
       ${departement ? sql`and r.departement = ${departement}` : sql``}
       ${cpv ? sql`and r.cpv like ${cpv + "%"}` : sql``}
     group by r.uid, r.objet, r.acheteur_siret, a.nom, r.famille, r.cpv, r.montant, r.date_fin_estimee,
-      r.duree_mois, r.offres_recues
+      r.duree_mois, r.offres_recues, r.deja_relance_le
     order by r.date_fin_estimee, r.montant desc nulls last
     limit ${limite}`;
 }

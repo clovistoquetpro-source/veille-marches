@@ -57,6 +57,20 @@ const DEPARTEMENT = `
       end
   end`;
 
+/**
+ * Identifiant de titulaire nettoyé. L'ancien format stocke parfois le SIRET comme un nombre : les zéros
+ * de tête sont perdus. « CDL » est une valeur de remplissage du nouveau format quand il n'y a pas de
+ * cotitulaire.
+ */
+function titulaire(colonne: string, type: string): string {
+  const brut = `regexp_replace(${colonne}::varchar, '\\s', '', 'g')`;
+  return `case
+    when ${colonne} is null or trim(${colonne}::varchar) in ('', 'CDL') or ${type} = 'CDL' then null
+    when ${type} = 'SIRET' and ${brut} ~ '^\\d{12,14}$' then lpad(${brut}, 14, '0')
+    else trim(${colonne}::varchar)
+  end`;
+}
+
 /** Littéral SQL échappé pour DuckDB. */
 function texte(valeur: string): string {
   return `'${valeur.replaceAll("'", "''")}'`;
@@ -86,9 +100,9 @@ export async function normaliser(
       try_cast(try_cast(offresrecues as double) as integer) as offres_recues,
       ${DEPARTEMENT} as departement,
       source,
-      titulaire_id_1::varchar as t1, titulaire_typeidentifiant_1 as tt1,
-      titulaire_id_2::varchar as t2, titulaire_typeidentifiant_2 as tt2,
-      titulaire_id_3::varchar as t3, titulaire_typeidentifiant_3 as tt3
+      ${titulaire("titulaire_id_1", "titulaire_typeidentifiant_1")} as t1, titulaire_typeidentifiant_1 as tt1,
+      ${titulaire("titulaire_id_2", "titulaire_typeidentifiant_2")} as t2, titulaire_typeidentifiant_2 as tt2,
+      ${titulaire("titulaire_id_3", "titulaire_typeidentifiant_3")} as t3, titulaire_typeidentifiant_3 as tt3
     from ${sources[format]}`;
 
   await con.run(`
@@ -100,20 +114,32 @@ export async function normaliser(
 
   // Un même marché peut apparaître plusieurs fois (modifications, doublons entre sources ou entre
   // formats) : on garde la ligne de notification la plus ancienne, en préférant le nouveau format.
+  // Les marchés transmis par la DGFIP figurent dans les deux formats sous deux identifiants différents
+  // (« 20220118 » et « 2022011800 ») : on les reconnaît au même acheteur, même date, même montant,
+  // même objet, même CPV et même premier titulaire.
   await con.run(`
     create or replace table marches_norm as
-    with dedoublonne as (
+    with par_identifiant as (
       select *, row_number() over (
         partition by acheteur_siret, id_marche
         order by date_notification, format desc
       ) as rang
       from decp_brut
     ),
+    par_contenu as (
+      select * exclude (rang), row_number() over (
+        partition by acheteur_siret, date_notification, montant, coalesce(objet, ''), coalesce(cpv, ''), t1
+        order by format desc, id_marche
+      ) as rang
+      from par_identifiant
+      where rang = 1
+    ),
     classe as (
       select *,
         left(cpv, 2) as division,
         case when duree_mois between 1 and 120 then duree_mois end as duree_valide
-      from dedoublonne where rang = 1
+      from par_contenu
+      where rang = 1 or montant is null or t1 is null
     )
     select
       acheteur_siret || '-' || id_marche as uid,
@@ -134,27 +160,16 @@ export async function normaliser(
       t1, tt1, t2, tt2, t3, tt3
     from classe`);
 
-  // L'ancien format stocke parfois le SIRET comme un nombre : les zéros de tête sont perdus.
   await con.run(`
     create or replace table titulaires_norm as
     with titulaires as (
-      select uid, format, t1 as brut, tt1 as type_identifiant from marches_norm
-      union all select uid, format, t2, tt2 from marches_norm
-      union all select uid, format, t3, tt3 from marches_norm
-    ),
-    nettoyes as (
-      select uid, type_identifiant,
-        case
-          when type_identifiant = 'SIRET' and regexp_replace(brut, '\\s', '', 'g') ~ '^\\d{12,14}$'
-            then lpad(regexp_replace(brut, '\\s', '', 'g'), 14, '0')
-          else trim(brut)
-        end as titulaire_id
-      from titulaires
-      -- « CDL » est une valeur de remplissage du nouveau format quand il n'y a pas de cotitulaire.
-      where brut is not null and trim(brut) not in ('', 'CDL') and coalesce(type_identifiant, '') <> 'CDL'
+      select uid, t1 as titulaire_id, tt1 as type_identifiant from marches_norm
+      union all select uid, t2, tt2 from marches_norm
+      union all select uid, t3, tt3 from marches_norm
     )
     select distinct on (uid, titulaire_id) uid as marche_uid, titulaire_id, type_identifiant
-    from nettoyes`);
+    from titulaires
+    where titulaire_id is not null`);
 }
 
 /** Écrit les trois fichiers CSV que `chargerDecp` sait lire. */
@@ -175,7 +190,7 @@ export async function exporterCsv(con: DuckDBConnection, dossier: string): Promi
   await con.run(`
     copy (
       select acheteur_siret as siret, max(acheteur_nom) as nom
-      from marches_norm group by 1
+      from decp_brut where acheteur_siret in (select acheteur_siret from marches_norm) group by 1
     ) to ${texte(fichiers.acheteurs)} (header, delimiter ',')`);
   return fichiers;
 }

@@ -50,6 +50,7 @@ beforeAll(async () => {
     { id: "A1", codecpv: "50000000-5", datenotification: "2021-03-01", dureemois: 13, titulaire_id_1: "5820378000031", titulaire_typeidentifiant_1: "SIRET" },
     { id: "T1", lieu: "20090", typelieu: "CODE POSTAL", codecpv: "45210000-2", datenotification: "2022-06-15", dureemois: 24, titulaire_id_1: "12345678900011", titulaire_typeidentifiant_1: "SIRET" },
     { id: "M1", lieu: "97411", typelieu: "Code commune", codecpv: "71200000-0", datenotification: "2022-06-15", dureemois: 24, titulaire_id_1: "12345678900011", titulaire_typeidentifiant_1: "SIRET" },
+    { id: "D100", codecpv: "60100000-9", datenotification: "2023-05-10", dureemois: 24, montant: 70000, titulaire_id_1: "5820378000031", titulaire_typeidentifiant_1: "SIRET" },
     // acheteur invalide : ignoré
     { id: "X1", acheteur_id: "123", codecpv: "50000000-5", datenotification: "2022-01-01", dureemois: 12 },
   ], true);
@@ -60,6 +61,8 @@ beforeAll(async () => {
     { id: "S1", lieu: "84", typelieu: "Code région", codecpv: "90910000-9", datenotification: "2025-03-01", dureemois: 0, offresrecues: "0",
       titulaire_id_1: "22222222200022", titulaire_typeidentifiant_1: "SIRET",
       titulaire_id_2: "BE0123456789", titulaire_typeidentifiant_2: "TVA" },
+    // même marché que D100 (ancien format) transmis sous un autre identifiant : on garde celui-ci
+    { id: "D1", codecpv: "60100000-9", datenotification: "2023-05-10", dureemois: 24, montant: 70000, titulaire_id_1: "05820378000031", titulaire_typeidentifiant_1: "SIRET" },
     { id: "C1", codecpv: "90910000-9", datenotification: "2025-03-01", dureemois: 12,
       titulaire_id_1: "33333333300033", titulaire_typeidentifiant_1: "SIRET",
       titulaire_id_2: "CDL", titulaire_typeidentifiant_2: "CDL" },
@@ -68,10 +71,10 @@ beforeAll(async () => {
 });
 
 describe("normaliser les DECP", () => {
-  it("garde une ligne par marché et écarte les acheteurs invalides", async () => {
+  it("garde une ligne par marché, y compris publié dans les deux formats, et écarte les acheteurs invalides", async () => {
     const marches = await lignes<{ uid: string }>("select uid from marches_norm order by uid");
     expect(marches.map((m) => m.uid)).toEqual([
-      `${ACHETEUR}-A1`, `${ACHETEUR}-C1`, `${ACHETEUR}-F1`, `${ACHETEUR}-M1`, `${ACHETEUR}-S1`, `${ACHETEUR}-T1`,
+      `${ACHETEUR}-A1`, `${ACHETEUR}-C1`, `${ACHETEUR}-D1`, `${ACHETEUR}-F1`, `${ACHETEUR}-M1`, `${ACHETEUR}-S1`, `${ACHETEUR}-T1`,
     ]);
     const [a1] = await lignes<{ date_notification: string }>(
       `select date_notification::varchar as date_notification from marches_norm where id_marche = 'A1'`,
@@ -86,6 +89,7 @@ describe("normaliser les DECP", () => {
     expect(familles).toEqual([
       { id_marche: "A1", famille: "services", renouvelable: true },
       { id_marche: "C1", famille: "services", renouvelable: true },
+      { id_marche: "D1", famille: "services", renouvelable: true },
       { id_marche: "F1", famille: "fournitures", renouvelable: true },
       { id_marche: "M1", famille: "services", renouvelable: false },
       { id_marche: "S1", famille: "services", renouvelable: true },
@@ -110,6 +114,7 @@ describe("normaliser les DECP", () => {
     expect(departements).toEqual([
       { id_marche: "A1", departement: "69" },
       { id_marche: "C1", departement: "69" },
+      { id_marche: "D1", departement: "69" },
       { id_marche: "F1", departement: "35" },
       { id_marche: "M1", departement: "974" },
       { id_marche: "S1", departement: null },
@@ -123,6 +128,7 @@ describe("normaliser les DECP", () => {
     );
     expect(offres).toEqual([
       { id_marche: "C1", offres_recues: null },
+      { id_marche: "D1", offres_recues: null },
       { id_marche: "F1", offres_recues: 3 },
       { id_marche: "S1", offres_recues: null },
     ]);
@@ -135,6 +141,7 @@ describe("normaliser les DECP", () => {
     expect(titulaires).toEqual([
       { marche_uid: `${ACHETEUR}-A1`, titulaire_id: "05820378000031" },
       { marche_uid: `${ACHETEUR}-C1`, titulaire_id: "33333333300033" },
+      { marche_uid: `${ACHETEUR}-D1`, titulaire_id: "05820378000031" },
       { marche_uid: `${ACHETEUR}-F1`, titulaire_id: "11111111100011" },
       { marche_uid: `${ACHETEUR}-M1`, titulaire_id: "12345678900011" },
       { marche_uid: `${ACHETEUR}-S1`, titulaire_id: "22222222200022" },
