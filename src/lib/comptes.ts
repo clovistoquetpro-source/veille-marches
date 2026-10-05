@@ -13,6 +13,11 @@ const JOURS_SESSION = 30;
 
 export const COOKIE_SESSION = "session";
 
+/** Identifiant tiré au sort (session, lien de désinscription). */
+export function jetonAleatoire(octets = 32): string {
+  return [...crypto.getRandomValues(new Uint8Array(octets))].map((o) => o.toString(16).padStart(2, "0")).join("");
+}
+
 /** Adresse valable et normalisée en minuscules, ou null. */
 export function normaliserEmail(brut: string): string | null {
   const email = brut.trim().toLowerCase();
@@ -28,17 +33,17 @@ export async function creerCompte(
   compte: { email: string; siren: string | null; siret: string | null; nom: string | null },
 ): Promise<Compte> {
   const [ligne] = await sql<Compte[]>`
-    insert into comptes (email, siren, siret, nom)
-    values (${compte.email}, ${compte.siren}, ${compte.siret}, ${compte.nom})
-    on conflict (email) do update set siren = excluded.siren, siret = excluded.siret, nom = excluded.nom
+    insert into comptes (email, siren, siret, nom, jeton)
+    values (${compte.email}, ${compte.siren}, ${compte.siret}, ${compte.nom}, ${jetonAleatoire(16)})
+    on conflict (email) do update set siren = excluded.siren, siret = excluded.siret, nom = excluded.nom,
+      jeton = coalesce(comptes.jeton, excluded.jeton)
     returning id, email, siren, siret, nom`;
   return ligne;
 }
 
 /** Ouvre une session et renvoie l'identifiant à déposer dans le cookie. */
 export async function ouvrirSession(sql: postgres.Sql, compteId: string): Promise<string> {
-  const octets = crypto.getRandomValues(new Uint8Array(32));
-  const id = [...octets].map((o) => o.toString(16).padStart(2, "0")).join("");
+  const id = jetonAleatoire();
   await sql`
     insert into sessions (id, compte_id, expire_le)
     values (${id}, ${compteId}, now() + ${JOURS_SESSION + " days"}::interval)`;
@@ -57,4 +62,19 @@ export async function compteDeLaSession(sql: postgres.Sql, session: string | und
 
 export async function fermerSession(sql: postgres.Sql, session: string): Promise<void> {
   await sql`delete from sessions where id = ${session}`;
+}
+
+/** Jeton de désinscription du compte, créé au besoin (les comptes d'avant les alertes n'en ont pas). */
+export async function jetonDeDesinscription(sql: postgres.Sql, compteId: string): Promise<string> {
+  const [ligne] = await sql<{ jeton: string }[]>`
+    update comptes set jeton = coalesce(jeton, ${jetonAleatoire(16)}) where id = ${compteId} returning jeton`;
+  return ligne.jeton;
+}
+
+/** Coupe les alertes d'un compte à partir du jeton de son lien de désinscription. */
+export async function desinscrire(sql: postgres.Sql, jeton: string): Promise<boolean> {
+  const lignes = await sql`
+    update profils set frequence = 'aucune', maj_le = now()
+    where compte_id = (select id from comptes where jeton = ${jeton})`;
+  return lignes.count > 0;
 }

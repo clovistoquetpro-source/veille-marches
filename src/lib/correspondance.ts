@@ -16,7 +16,7 @@ export function profilVide(profil: Profil): boolean {
 }
 
 /** `cpv like 'X%' or objet ilike '%mot%'…`, pour les tables qui ont une colonne `cpv` et une colonne d'objet. */
-function criteres(sql: postgres.Sql, profil: Profil, cpv: postgres.Fragment, objet: postgres.Fragment) {
+export function criteresProfil(sql: postgres.Sql, profil: Profil, cpv: postgres.Fragment, objet: postgres.Fragment) {
   const liste = [
     ...profil.cpv.map((c) => sql`${cpv} like ${c + "%"}`),
     ...profil.mots_cles.map((m) => sql`${objet} ilike ${"%" + m + "%"}`),
@@ -34,7 +34,7 @@ export async function avisDuProfil(sql: postgres.Sql, profil: Profil, limite = 5
     from avis av
     where av.type in ('marche', 'preinformation')
       and (av.date_limite is null or av.date_limite >= current_date)
-      and (${criteres(sql, profil, sql`av.cpv`, sql`av.objet`)})
+      and (${criteresProfil(sql, profil, sql`av.cpv`, sql`av.objet`)})
       ${profil.departements.length > 0
         ? sql`and av.departements && ${tableauPg(profil.departements)}::text[]`
         : sql``}
@@ -57,7 +57,7 @@ export async function renouvellementsDuProfil(
     from renouvellements r
     left join acheteurs a on a.siret = r.acheteur_siret
     left join entreprises e on e.siren = left(r.acheteur_siret, 9)
-    where (${criteres(sql, profil, sql`r.cpv`, sql`r.objet`)})
+    where (${criteresProfil(sql, profil, sql`r.cpv`, sql`r.objet`)})
       ${profil.departements.length > 0 ? sql`and r.departement = any(${tableauPg(profil.departements)}::text[])` : sql``}
     order by r.date_fin_estimee, r.montant desc nulls last
     limit ${limite}`;

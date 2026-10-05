@@ -14,6 +14,8 @@ function liste(valeur: FormDataEntryValue | null): string[] {
 
 export type EtatProfil = { message?: string; erreur?: string };
 
+const FREQUENCES = ["quotidienne", "hebdomadaire", "aucune"] as const;
+
 /** Enregistre le profil corrigé par le client. */
 export async function actionProfil(_etat: EtatProfil, formulaire: FormData): Promise<EtatProfil> {
   const sql = db();
@@ -26,6 +28,7 @@ export async function actionProfil(_etat: EtatProfil, formulaire: FormData): Pro
       mots_cles: liste(formulaire.get("mots_cles")),
       departements: liste(formulaire.get("departements")).map((d) => d.toUpperCase()),
       origine: "manuel",
+      frequence: FREQUENCES.find((f) => f === formulaire.get("frequence")) ?? "quotidienne",
     });
   } finally {
     await sql.end();

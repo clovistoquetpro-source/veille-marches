@@ -13,6 +13,7 @@
     "import:decp": "tsx scripts/import-decp.ts",
     "import:avis": "tsx scripts/import-avis.ts",
     "import:sirene": "tsx scripts/import-sirene.ts",
+    "alertes": "tsx scripts/envoyer-alertes.ts",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"

@@ -13,7 +13,9 @@ import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, normaliser } from "../src/ingest/decp";
 import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
-import { compteDeLaSession, creerCompte, fermerSession, ouvrirSession } from "../src/lib/comptes";
+import { destinataires, envoyerAlertes } from "../src/lib/alertes";
+import { compteDeLaSession, creerCompte, desinscrire, fermerSession, ouvrirSession } from "../src/lib/comptes";
+import type { Courriel } from "../src/lib/courriel";
 import { avisDuProfil, renouvellementsDuProfil } from "../src/lib/correspondance";
 import { listerAvis } from "../src/lib/avis";
 import { ficheEntreprise } from "../src/lib/entreprises";
@@ -265,6 +267,7 @@ describe.skipIf(!locale)("comptes et veille personnalisée", () => {
     });
     expect(await profilDuCompte(sql, compte.id)).toEqual({
       cpv: ["90910000"], mots_cles: ["gymnases"], departements: ["69"], origine: "historique",
+      frequence: "quotidienne",
     });
   });
 
@@ -281,5 +284,83 @@ describe.skipIf(!locale)("comptes et veille personnalisée", () => {
     // un profil vide ne remonte rien plutôt que tout
     expect(await avisDuProfil(sql, { ...profil, cpv: [] })).toEqual([]);
     expect(await renouvellementsDuProfil(sql, { ...profil, cpv: [] })).toEqual([]);
+  });
+});
+
+/** Suite des précédentes : envoi des alertes par courriel. */
+describe.skipIf(!locale)("alertes par courriel", () => {
+  let sql: postgres.Sql;
+  const envoyes: Courriel[] = [];
+  const envoyeur = async (courriel: Courriel) => {
+    envoyes.push(courriel);
+  };
+
+  beforeAll(async () => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+    // le marché S3 finit dans 9 mois : il entre dans la fenêtre de relance de 6 à 12 mois
+    const compte = await creerCompte(sql, {
+      email: "alerte@exemple.fr", siren: "111111111", siret: null, nom: "NETTOYAGE DU RHONE",
+    });
+    await enregistrerProfil(sql, compte.id, {
+      cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "historique", frequence: "hebdomadaire",
+    });
+    // un compte sans code CPV ni mot-clé ne doit jamais recevoir de courriel
+    const vide = await creerCompte(sql, { email: "vide@exemple.fr", siren: null, siret: null, nom: null });
+    await enregistrerProfil(sql, vide.id, {
+      cpv: [], mots_cles: [], departements: [], origine: "manuel", frequence: "hebdomadaire",
+    });
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  it("ne retient que les clients dont le profil peut remonter quelque chose", async () => {
+    const liste = await destinataires(sql, "hebdomadaire");
+    expect(liste.map((d) => d.email)).toEqual(["alerte@exemple.fr"]);
+    expect(liste[0].profil).toEqual({
+      cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "historique",
+    });
+    // le compte au profil vide n'est proposé pour aucun rythme
+    const quotidien = (await destinataires(sql, "quotidienne")).map((d) => d.email);
+    expect(quotidien).not.toContain("alerte@exemple.fr");
+    expect(quotidien).not.toContain("vide@exemple.fr");
+  });
+
+  it("envoie une alerte, puis ne répète pas ce qui a déjà été annoncé", async () => {
+    const premier = await envoyerAlertes(sql, envoyeur, "hebdomadaire");
+    expect(premier).toEqual({ envoyees: 1, erreurs: 0, sansNouveaute: 0 });
+    expect(envoyes).toHaveLength(1);
+    expect(envoyes[0].a).toBe("alerte@exemple.fr");
+    expect(envoyes[0].texte).toContain("Nettoyage des écoles");
+
+    const second = await envoyerAlertes(sql, envoyeur, "hebdomadaire");
+    expect(second).toEqual({ envoyees: 0, erreurs: 0, sansNouveaute: 1 });
+    expect(envoyes).toHaveLength(1);
+
+    const [alerte] = await sql`select statut, nb_avis, nb_renouvellements from alertes order by id desc limit 1`;
+    expect(alerte.statut).toBe("envoyee");
+  });
+
+  it("journalise un envoi raté sans arrêter les autres, et le reprend au passage suivant", async () => {
+    await sql`delete from alertes_avis`;
+    await sql`delete from alertes_marches`;
+    const resultat = await envoyerAlertes(sql, async () => {
+      throw new Error("Brevo : erreur 500");
+    }, "hebdomadaire");
+    expect(resultat).toEqual({ envoyees: 0, erreurs: 1, sansNouveaute: 0 });
+    const [erreur] = await sql`select statut, message from alertes order by id desc limit 1`;
+    expect(erreur).toMatchObject({ statut: "erreur", message: "Brevo : erreur 500" });
+    // rien n'a été retenu comme annoncé : le prochain passage reprend le même contenu
+    expect((await envoyerAlertes(sql, envoyeur, "hebdomadaire")).envoyees).toBe(1);
+  });
+
+  it("coupe les alertes depuis le lien de désinscription", async () => {
+    const [{ jeton }] = await sql<{ jeton: string }[]>`select jeton from comptes where email = 'alerte@exemple.fr'`;
+    expect(await desinscrire(sql, jeton)).toBe(true);
+    expect(await desinscrire(sql, "jeton-inconnu")).toBe(false);
+    await sql`delete from alertes_avis`;
+    await sql`delete from alertes_marches`;
+    expect(await envoyerAlertes(sql, envoyeur, "hebdomadaire")).toEqual({ envoyees: 0, erreurs: 0, sansNouveaute: 0 });
   });
 });
