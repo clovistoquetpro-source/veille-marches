@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Section } from "@/components/fiche";
+import { abonnementDuCompte, accesOuvert, joursDEssai } from "@/lib/abonnements";
 import { LienEntreprise, ListeTitulaires } from "@/components/liens";
 import { Sources } from "@/components/sources";
 import { avisDuProfil, profilVide, renouvellementsDuProfil } from "@/lib/correspondance";
@@ -24,14 +25,16 @@ export default async function PageVeille() {
     if (!compte) return null;
     const profil = (await profilDuCompte(sql, compte.id))
       ?? { cpv: [], mots_cles: [], departements: [], origine: "manuel" as const, frequence: "quotidienne" as const };
-    const [avis, renouvellements] = await Promise.all([
+    const [avis, renouvellements, abonnement] = await Promise.all([
       avisDuProfil(sql, profil, 30),
       renouvellementsDuProfil(sql, profil, 30),
+      abonnementDuCompte(sql, compte.id),
     ]);
-    return { compte, profil, avis, renouvellements };
+    return { compte, profil, avis, renouvellements, abonnement };
   })().finally(() => sql.end());
   if (!donnees) redirect("/inscription");
-  const { compte, profil, avis, renouvellements } = donnees;
+  const { compte, profil, avis, renouvellements, abonnement } = donnees;
+  const jours = joursDEssai(abonnement);
 
   return (
     <main className="mx-auto max-w-5xl p-6">
@@ -44,6 +47,18 @@ export default async function PageVeille() {
           <button className="text-sm text-gray-600 underline">Se déconnecter</button>
         </form>
       </div>
+
+      {!accesOuvert(abonnement) ? (
+        <p className="mt-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          Votre essai est terminé : vos alertes ne partent plus.{" "}
+          <Link href="/abonnement" className="underline">Reprendre l&apos;abonnement</Link>.
+        </p>
+      ) : jours !== null && jours <= 5 ? (
+        <p className="mt-4 rounded border border-gray-300 bg-gray-50 p-3 text-sm text-gray-700">
+          Il vous reste {jours} jour{jours > 1 ? "s" : ""} d&apos;essai.{" "}
+          <Link href="/abonnement" className="underline">Voir l&apos;abonnement</Link>.
+        </p>
+      ) : null}
 
       <PanneauProfil profil={profil} ouvert={avis.length === 0} />
 

@@ -61,6 +61,29 @@ L'envoi passe par [Brevo](https://brevo.com) (secret `BREVO_API_KEY`) ; sans cl�
 affichés dans la console. Chaque courriel porte un lien de désinscription qui coupe les alertes sans
 supprimer le compte.
 
+## Abonnement
+
+Essai gratuit de 14 jours à l'inscription, sans carte. Ensuite l'abonnement passe par Stripe
+(`STRIPE_SECRET_KEY`, `STRIPE_PRIX`, et `STRIPE_WEBHOOK_SECRET` pour le point d'entrée
+`/api/stripe`). Sans ces variables, le site reste utilisable : le paiement est simplement masqué.
+Les alertes ne partent qu'aux comptes dont l'accès est ouvert (abonnement en cours ou essai non échu).
+
+## Mise en ligne
+
+Le site tourne sur Cloudflare Workers (`npm run deploy`) et la base sur Supabase.
+
+1. Créer le projet Supabase (région UE), récupérer la chaîne de connexion en mode *Transaction*.
+2. `DATABASE_URL=… npm run db:migrer`, puis les imports (`import:decp`, `import:sirene`, `import:avis`).
+3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY` ;
+   variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports et les alertes sont sautés.
+4. Dans Cloudflare, `npx wrangler secret put` pour `DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`,
+   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET`, et les variables `SITE_URL` et `EDITEUR_*`.
+5. Dans Stripe, déclarer le point d'entrée `https://…/api/stripe` pour les événements
+   `checkout.session.completed`, `customer.subscription.*` et `invoice.payment_failed`.
+
+**Avant d'encaisser le premier paiement** : renseigner les variables `EDITEUR_*` (les mentions légales
+et les conditions affichent sinon un avertissement) et faire relire les conditions de vente.
+
 ## Données
 
 - **DECP** : exports parquet de [data.economie.gouv.fr](https://data.economie.gouv.fr), jeux `decp-v3-marches-valides` (2018-2023) et `decp-2022-marches-valides` (2023 à aujourd'hui). Import complet chaque lundi, suivi de Sirene.
