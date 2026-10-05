@@ -116,7 +116,8 @@ export async function normaliser(
   // formats) : on garde la ligne de notification la plus ancienne, en préférant le nouveau format.
   // Les marchés transmis par la DGFIP figurent dans les deux formats sous deux identifiants différents
   // (« 20220118 » et « 2022011800 ») : on les reconnaît au même acheteur, même date, même montant,
-  // même objet, même CPV et même premier titulaire.
+  // même objet, même CPV et mêmes titulaires (dont l'ordre peut changer d'un format à l'autre : on
+  // compare le plus petit identifiant).
   await con.run(`
     create or replace table marches_norm as
     with par_identifiant as (
@@ -127,8 +128,8 @@ export async function normaliser(
       from decp_brut
     ),
     par_contenu as (
-      select * exclude (rang), row_number() over (
-        partition by acheteur_siret, date_notification, montant, coalesce(objet, ''), coalesce(cpv, ''), t1
+      select * exclude (rang), least(t1, t2, t3) as titulaire_cle, row_number() over (
+        partition by acheteur_siret, date_notification, montant, coalesce(objet, ''), coalesce(cpv, ''), least(t1, t2, t3)
         order by format desc, id_marche
       ) as rang
       from par_identifiant
@@ -139,7 +140,7 @@ export async function normaliser(
         left(cpv, 2) as division,
         case when duree_mois between 1 and 120 then duree_mois end as duree_valide
       from par_contenu
-      where rang = 1 or montant is null or t1 is null
+      where rang = 1 or montant is null or titulaire_cle is null
     )
     select
       acheteur_siret || '-' || id_marche as uid,
