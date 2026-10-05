@@ -9,7 +9,7 @@ Architecture et calendrier : [document d'architecture](https://claude.ai/code/ar
 | Dossier | Contenu |
 | --- | --- |
 | `src/app` | Site Next.js (pages publiques et espace client) |
-| `src/lib` | Accès à la base et requêtes métier (renouvellements…) |
+| `src/lib` | Accès à la base et requêtes métier (renouvellements, fiches, profils de veille…) |
 | `src/ingest` | Nettoyage et chargement des données publiques |
 | `scripts` | Commandes lancées à la main ou par les tâches planifiées |
 | `db/migrations` | Schéma de la base, appliqué dans l'ordre des fichiers |
@@ -31,6 +31,23 @@ npm run deploy         # mise en ligne sur Cloudflare
 ```
 
 Variables : voir `.env.example`.
+
+## Inscription et profil de veille
+
+Le client ne donne que son SIRET. On demande son nom et son activité à l'[annuaire des
+entreprises](https://recherche-entreprises.api.gouv.fr) (API publique, sans clé), puis on lui propose
+un profil de veille :
+
+1. les classes CPV et les départements de ses marchés déjà gagnés, dès qu'il en a au moins trois ;
+2. sinon une déduction de l'IA à partir de son activité déclarée (clé `ANTHROPIC_API_KEY`) ;
+3. sinon les mots significatifs de cette activité.
+
+Le profil est modifiable sur `/veille` : préfixes CPV, mots-clés cherchés dans l'objet des avis, et
+départements (vide = toute la France). Un avis correspond quand son code CPV commence par l'un des
+préfixes **ou** que son objet contient l'un des mots-clés, et qu'il s'exécute dans l'un des
+départements suivis. Les mêmes règles serviront aux alertes par courriel.
+
+La session est un identifiant tiré au sort, déposé dans un cookie et conservé un mois en base.
 
 ## Données
 

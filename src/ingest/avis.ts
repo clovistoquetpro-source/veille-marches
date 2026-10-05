@@ -5,6 +5,7 @@
  * prend pour ne pas les compter deux fois.
  */
 import type postgres from "postgres";
+import { tableauPg } from "../lib/pg";
 
 export type TypeAvis =
   | "marche" | "attribution" | "preinformation" | "rectificatif" | "annulation" | "modification" | "autre";
@@ -78,8 +79,8 @@ export async function enregistrerAvis(sql: postgres.Sql, avis: Avis[]): Promise<
       const lot = avis.slice(debut, debut + 500);
       const lignes = lot.map(({ titulaires, ...a }) => ({
         ...a,
-        descripteurs: a.descripteurs ? `{${a.descripteurs.map(tableauPg).join(",")}}` : null,
-        departements: `{${a.departements.map(tableauPg).join(",")}}`,
+        descripteurs: a.descripteurs ? tableauPg(a.descripteurs) : null,
+        departements: tableauPg(a.departements),
       }));
       await tx`
         insert into avis ${tx(lignes)}
@@ -99,9 +100,4 @@ export async function enregistrerAvis(sql: postgres.Sql, avis: Avis[]): Promise<
     }
   });
   return avis.length;
-}
-
-/** Élément d'un littéral de tableau PostgreSQL (« {a,"b c"} »). */
-function tableauPg(valeur: string): string {
-  return `"${valeur.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
