@@ -3,13 +3,18 @@
  * Ne tourne que si DATABASE_URL_TEST pointe vers une base locale (la base est vidée).
  */
 import { DuckDBInstance } from "@duckdb/node-api";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { type Avis, enregistrerAvis } from "../src/ingest/avis";
 import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, normaliser } from "../src/ingest/decp";
+import { chargerEntreprises } from "../src/ingest/sirene";
+import { ficheAcheteur } from "../src/lib/acheteurs";
+import { listerAvis } from "../src/lib/avis";
+import { ficheEntreprise } from "../src/lib/entreprises";
 import { listerRenouvellements } from "../src/lib/renouvellements";
 
 const url = process.env.DATABASE_URL_TEST;
@@ -84,7 +89,10 @@ describe.skipIf(!locale)("charger les DECP dans PostgreSQL", () => {
 
   it("filtre les renouvellements par département et par code CPV", async () => {
     const [s1, s3] = await listerRenouvellements(sql, { departement: "69", cpv: "909" });
-    expect(s1).toMatchObject({ objet: "Nettoyage", acheteur_nom: "Ville de Test", titulaires: ["11111111100011"] });
+    expect(s1).toMatchObject({
+      objet: "Nettoyage", acheteur_nom: "Ville de Test",
+      titulaires: [{ id: "11111111100011", siren: "111111111", nom: null }],
+    });
     expect(s1.deja_relance_le).not.toBeNull();
     expect(s3).toMatchObject({ objet: "Nettoyage des écoles", deja_relance_le: null });
     expect(await listerRenouvellements(sql, { departement: "75" })).toEqual([]);
@@ -98,5 +106,108 @@ describe.skipIf(!locale)("charger les DECP dans PostgreSQL", () => {
 
   it("ne réapplique pas une migration déjà passée", async () => {
     expect(await migrer(sql, path.join(process.cwd(), "db/migrations"))).toEqual([]);
+  });
+});
+
+/** Suite de la précédente : avis, entreprises et fiches, sur les marchés déjà chargés. */
+describe.skipIf(!locale)("avis, entreprises et fiches", () => {
+  let sql: postgres.Sql;
+  const ACHETEUR = "21690123100011";
+
+  const avis = (champs: Partial<Avis>): Avis => ({
+    uid: "boamp-26-1", source: "boamp", numero: "26-1", type: "marche", objet: "Nettoyage des écoles",
+    acheteur_nom: "Ville de Test", acheteur_siret: ACHETEUR, cpv: "90910000", famille: "services",
+    descripteurs: ["Nettoyage", "Propreté \"urbaine\""], departements: ["69"], date_publication: "2026-10-01",
+    date_limite: "2026-11-02", montant: null, offres_recues: null, url: "https://www.boamp.fr/pages/avis/?q=idweb:26-1",
+    avis_initial: null, titulaires: [],
+    ...champs,
+  });
+
+  beforeAll(async () => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+    const csv = path.join(await mkdtemp(path.join(tmpdir(), "entreprises-test-")), "entreprises.csv");
+    await writeFile(csv, [
+      "siren,nom,sigle,categorie_juridique,naf,tranche_effectif,categorie,date_creation,active,diffusible",
+      "111111111,NETTOYAGE DU RHONE,,5710,81.21Z,12,PME,2005-03-01,true,true",
+      "216901231,COMMUNE DE TEST,,7210,84.11Z,,,1950-01-01,true,true",
+      "222222222,,,1000,56.10A,,PME,2015-01-01,true,false",
+    ].join("\n") + "\n");
+    expect(await chargerEntreprises(sql, csv)).toBe(3);
+
+    const premier = [
+      avis({}),
+      avis({
+        uid: "ted-1-2026", source: "ted", numero: "1-2026", type: "attribution", objet: "Nettoyage des gymnases",
+        descripteurs: null, date_publication: "2026-09-30", date_limite: null, montant: 45000,
+        url: "https://ted.europa.eu/fr/notice/-/detail/1-2026",
+        titulaires: [{ nom: "Nettoyage du Rhône", identifiant: "11111111100011" }, { nom: "Brouillon", identifiant: null }],
+      }),
+      avis({ uid: "boamp-26-2", numero: "26-2", type: "rectificatif", objet: "Rectificatif nettoyage", departements: ["01"] }),
+    ];
+    await enregistrerAvis(sql, premier);
+    // Un second import met à jour les avis et remplace leurs titulaires.
+    premier[1] = { ...premier[1], titulaires: [{ nom: "Nettoyage du Rhône", identifiant: "11111111100011" }] };
+    await enregistrerAvis(sql, premier);
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  it("enregistre les avis, leurs départements et leurs titulaires sans doublon", async () => {
+    const lignes = await sql`select uid, array_to_json(departements) as departements,
+      array_to_json(descripteurs) as descripteurs from avis order by uid`;
+    expect(lignes).toEqual([
+      { uid: "boamp-26-1", departements: ["69"], descripteurs: ["Nettoyage", 'Propreté "urbaine"'] },
+      { uid: "boamp-26-2", departements: ["01"], descripteurs: ["Nettoyage", 'Propreté "urbaine"'] },
+      { uid: "ted-1-2026", departements: ["69"], descripteurs: null },
+    ]);
+    expect(await sql`select avis_uid, nom, siren from avis_titulaires`).toEqual([
+      { avis_uid: "ted-1-2026", nom: "Nettoyage du Rhône", siren: "111111111" },
+    ]);
+  });
+
+  it("liste les avis sans les rectificatifs, avec filtres", async () => {
+    expect((await listerAvis(sql)).map((a) => a.uid)).toEqual(["boamp-26-1", "ted-1-2026"]);
+    expect((await listerAvis(sql, { type: "marche", departement: "69" })).map((a) => a.uid)).toEqual(["boamp-26-1"]);
+    expect((await listerAvis(sql, { texte: "gymnases" })).map((a) => a.uid)).toEqual(["ted-1-2026"]);
+    expect(await listerAvis(sql, { cpv: "45" })).toEqual([]);
+    const [attribution] = await listerAvis(sql, { type: "attribution" });
+    expect(attribution.titulaires).toEqual([{ nom: "NETTOYAGE DU RHONE", siren: "111111111" }]);
+  });
+
+  it("affiche les noms Sirene dans les renouvellements", async () => {
+    const [s1] = await listerRenouvellements(sql, { cpv: "909" });
+    expect(s1).toMatchObject({
+      acheteur_nom: "COMMUNE DE TEST",
+      titulaires: [{ id: "11111111100011", siren: "111111111", nom: "NETTOYAGE DU RHONE" }],
+    });
+  });
+
+  it("construit la fiche d'un acheteur", async () => {
+    const fiche = await ficheAcheteur(sql, ACHETEUR);
+    expect(fiche).toMatchObject({
+      nom: "COMMUNE DE TEST", categorie: "Commune et commune nouvelle", departement: "69", marches: 4,
+      montant: 250000, offres_moyennes: 2.5, marches_avec_offres: 4, offre_unique: 1,
+    });
+    expect(fiche!.renouvellements.map((r) => r.objet)).toEqual(["Nettoyage", "Nettoyage des écoles"]);
+    expect(fiche!.divisions[0]).toEqual({ division: "45", marches: 1, montant: 90000 });
+    expect(fiche!.titulaires).toHaveLength(4);
+    expect(fiche!.avis.map((a) => a.uid)).toEqual(["boamp-26-1", "boamp-26-2", "ted-1-2026"]);
+    expect(await ficheAcheteur(sql, "99999999999999")).toBeNull();
+  });
+
+  it("construit la fiche d'une entreprise", async () => {
+    const fiche = await ficheEntreprise(sql, "111111111");
+    expect(fiche).toMatchObject({
+      nom: "NETTOYAGE DU RHONE", naf: "81.21Z", naf_libelle: "Nettoyage courant des bâtiments",
+      categorie_juridique: "SAS, société par actions simplifiée", marches: 1, nb_acheteurs: 1, montant: 50000,
+      acheteurs: [{ siret: ACHETEUR, nom: "COMMUNE DE TEST", marches: 1, montant: 50000 }],
+    });
+    expect(fiche!.echeances.map((e) => e.objet)).toEqual(["Nettoyage"]);
+    expect(fiche!.attributions.map((a) => a.uid)).toEqual(["ted-1-2026"]);
+    // entrepreneur individuel qui refuse la diffusion : fiche sans nom
+    expect(await ficheEntreprise(sql, "222222222")).toMatchObject({ nom: null, diffusible: false });
+    expect(await ficheEntreprise(sql, "999999999")).toBeNull();
   });
 });

@@ -70,6 +70,10 @@ beforeAll(async () => {
     { id: "L1", codecpv: "90511400-6", datenotification: "2024-01-15", dureemois: 48, montant: 250000,
       titulaire_id_1: "55555555500055", titulaire_typeidentifiant_1: "SIRET",
       titulaire_id_2: "44444444400044", titulaire_typeidentifiant_2: "SIRET" },
+    // acheteur et titulaire « 00000000000000 », montant de remplissage 99 999 999 €
+    { id: "Z1", acheteur_id: "00000000000000", codecpv: "90910000-9", datenotification: "2024-01-01", dureemois: 12 },
+    { id: "P1", codecpv: "90910000-9", datenotification: "2024-06-01", dureemois: 12, montant: 99999999,
+      titulaire_id_1: "00000000000000", titulaire_typeidentifiant_1: "SIRET" },
     { id: "C1", codecpv: "90910000-9", datenotification: "2025-03-01", dureemois: 12,
       titulaire_id_1: "33333333300033", titulaire_typeidentifiant_1: "SIRET",
       titulaire_id_2: "CDL", titulaire_typeidentifiant_2: "CDL" },
@@ -81,7 +85,7 @@ describe("normaliser les DECP", () => {
   it("garde une ligne par marché, y compris publié dans les deux formats, et écarte les acheteurs invalides", async () => {
     const marches = await lignes<{ uid: string }>("select uid from marches_norm order by uid");
     expect(marches.map((m) => m.uid)).toEqual([
-      `${ACHETEUR}-A1`, `${ACHETEUR}-C1`, `${ACHETEUR}-D1`, `${ACHETEUR}-F1`, `${ACHETEUR}-L1`, `${ACHETEUR}-M1`, `${ACHETEUR}-S1`, `${ACHETEUR}-T1`,
+      `${ACHETEUR}-A1`, `${ACHETEUR}-C1`, `${ACHETEUR}-D1`, `${ACHETEUR}-F1`, `${ACHETEUR}-L1`, `${ACHETEUR}-M1`, `${ACHETEUR}-P1`, `${ACHETEUR}-S1`, `${ACHETEUR}-T1`,
     ]);
     const [a1] = await lignes<{ date_notification: string }>(
       `select date_notification::varchar as date_notification from marches_norm where id_marche = 'A1'`,
@@ -100,6 +104,7 @@ describe("normaliser les DECP", () => {
       { id_marche: "F1", famille: "fournitures", renouvelable: true },
       { id_marche: "L1", famille: "services", renouvelable: true },
       { id_marche: "M1", famille: "services", renouvelable: false },
+      { id_marche: "P1", famille: "services", renouvelable: true },
       { id_marche: "S1", famille: "services", renouvelable: true },
       { id_marche: "T1", famille: "travaux", renouvelable: false },
     ]);
@@ -126,9 +131,17 @@ describe("normaliser les DECP", () => {
       { id_marche: "F1", departement: "35" },
       { id_marche: "L1", departement: "69" },
       { id_marche: "M1", departement: "974" },
+      { id_marche: "P1", departement: "69" },
       { id_marche: "S1", departement: null },
       { id_marche: "T1", departement: "2A" },
     ]);
+  });
+
+  it("ignore les montants de remplissage (99 999 999 €)", async () => {
+    const montants = await lignes<{ id_marche: string; montant: number | null }>(
+      "select id_marche, montant from marches_norm where id_marche in ('P1', 'D1') order by id_marche",
+    );
+    expect(montants).toEqual([{ id_marche: "D1", montant: 70000 }, { id_marche: "P1", montant: null }]);
   });
 
   it("convertit le nombre d'offres et ignore les zéros", async () => {
@@ -140,11 +153,12 @@ describe("normaliser les DECP", () => {
       { id_marche: "D1", offres_recues: null },
       { id_marche: "F1", offres_recues: 3 },
       { id_marche: "L1", offres_recues: null },
+      { id_marche: "P1", offres_recues: null },
       { id_marche: "S1", offres_recues: null },
     ]);
   });
 
-  it("restaure les zéros de tête des SIRET, ignore « CDL » et dédoublonne les titulaires", async () => {
+  it("restaure les zéros de tête des SIRET, ignore « CDL », les zéros seuls, et dédoublonne les titulaires", async () => {
     const titulaires = await lignes<{ marche_uid: string; titulaire_id: string }>(
       "select marche_uid, titulaire_id from titulaires_norm order by marche_uid, titulaire_id",
     );

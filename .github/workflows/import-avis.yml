@@ -1,19 +1,23 @@
-name: Import des DECP et de Sirene
+name: Import des avis BOAMP et TED
 
 on:
   schedule:
-    # Chaque lundi à 3 h (heure de Paris en hiver) : les DECP sont mises à jour environ une fois par semaine.
-    - cron: "0 2 * * 1"
+    # Chaque matin à 5 h 30 UTC : les avis de la veille sont publiés au plus tard dans la nuit.
+    - cron: "30 5 * * *"
   workflow_dispatch:
+    inputs:
+      depuis:
+        description: "Reprendre les avis depuis cette date (AAAA-MM-JJ), sinon depuis le dernier import"
+        required: false
 
 concurrency:
-  group: import-decp
+  group: import-avis
   cancel-in-progress: false
 
 jobs:
   importer:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
     steps:
@@ -35,8 +39,7 @@ jobs:
           cache: npm
       - run: npm ci
         if: steps.config.outputs.pret == 'true'
-      - run: npm run import:decp
+      - run: npm run import:avis -- ${DEPUIS:+--depuis "$DEPUIS"}
         if: steps.config.outputs.pret == 'true'
-      # Noms et activités des nouveaux titulaires (fichier Sirene du mois)
-      - run: npm run import:sirene
-        if: steps.config.outputs.pret == 'true'
+        env:
+          DEPUIS: ${{ inputs.depuis }}

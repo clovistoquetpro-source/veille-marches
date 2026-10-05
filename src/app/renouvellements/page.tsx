@@ -1,12 +1,11 @@
+import { LienAcheteur, ListeTitulaires } from "@/components/liens";
+import { Sources } from "@/components/sources";
 import { db } from "@/lib/db";
+import { euros, jour, mois } from "@/lib/format";
 import { listerRenouvellements } from "@/lib/renouvellements";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Renouvellements à venir" };
-
-const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
-const mois = new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" });
-const jour = new Intl.DateTimeFormat("fr-FR");
 
 type Props = { searchParams: Promise<{ departement?: string; cpv?: string }> };
 
@@ -56,23 +55,24 @@ export default async function PageRenouvellements({ searchParams }: Props) {
         <tbody>
           {lignes.map((r) => (
             <tr key={r.uid} className="border-b align-top">
-              <td className="py-2 pr-3 whitespace-nowrap">{mois.format(new Date(r.date_fin_estimee))}</td>
+              <td className="py-2 pr-3 whitespace-nowrap">{mois(r.date_fin_estimee)}</td>
               <td className="py-2 pr-3">
                 {r.objet ?? "Objet non publié"}
                 {r.deja_relance_le && (
                   <span className="mt-1 block text-xs text-amber-700">
-                    Marché similaire déjà notifié le {jour.format(new Date(r.deja_relance_le))}
+                    Marché similaire déjà notifié le {jour(r.deja_relance_le)}
                   </span>
                 )}
               </td>
-              <td className="py-2 pr-3">{r.acheteur_nom ?? r.acheteur}</td>
-              <td className="py-2 pr-3 text-right whitespace-nowrap">{r.montant ? euros.format(r.montant) : "?"}</td>
-              <td className="py-2 pr-3">{r.titulaires.join(", ")}</td>
+              <td className="py-2 pr-3"><LienAcheteur siret={r.acheteur} nom={r.acheteur_nom} /></td>
+              <td className="py-2 pr-3 text-right whitespace-nowrap">{euros(r.montant)}</td>
+              <td className="py-2 pr-3"><ListeTitulaires titulaires={r.titulaires} /></td>
               <td className="py-2 text-right">{r.offres_recues ?? "?"}</td>
             </tr>
           ))}
         </tbody>
       </table>
+      <Sources />
     </main>
   );
 }

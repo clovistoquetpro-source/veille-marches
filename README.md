@@ -24,6 +24,8 @@ npm test               # tests (ajouter DATABASE_URL_TEST pour les tests sur une
 npm run lint && npm run typecheck
 npm run db:migrer      # applique les migrations sur DATABASE_URL
 npm run import:decp    # télécharge les DECP et remplace les marchés en base (5 à 10 minutes)
+npm run import:sirene  # noms et activités des entreprises et acheteurs (fichier Sirene, 1 à 2 minutes)
+npm run import:avis    # avis BOAMP et TED depuis le dernier import (ou -- --depuis AAAA-MM-JJ)
 npm run preview        # site tel qu'il tournera sur Cloudflare
 npm run deploy         # mise en ligne sur Cloudflare
 ```
@@ -32,8 +34,13 @@ Variables : voir `.env.example`.
 
 ## Données
 
-- **DECP** : exports parquet de [data.economie.gouv.fr](https://data.economie.gouv.fr), jeux `decp-v3-marches-valides` (2018-2023) et `decp-2022-marches-valides` (2023 à aujourd'hui). Import complet chaque lundi.
+- **DECP** : exports parquet de [data.economie.gouv.fr](https://data.economie.gouv.fr), jeux `decp-v3-marches-valides` (2018-2023) et `decp-2022-marches-valides` (2023 à aujourd'hui). Import complet chaque lundi, suivi de Sirene.
+- **BOAMP** : avis nationaux (MAPA, procédures formalisées) par l'API Opendatasoft de la DILA, chaque matin. Les avis européens repris par le BOAMP (famille « JOUE ») sont tous sur TED : on les prend là-bas.
+- **TED** : avis européens des acheteurs français par l'API de recherche v3, chaque matin. Les avis de modification sont classés en rectificatifs.
+- **Sirene** : fichier mensuel des unités légales (parquet sur data.gouv.fr), limité aux SIREN présents en base. Le nom des entrepreneurs individuels qui refusent la diffusion n'est pas repris.
 - Date de fin estimée = date de notification + durée publiée (reconductions comprises).
 - Les travaux (CPV 45) et la maîtrise d'œuvre (CPV 71) ne sont pas proposés comme renouvellements : leur fin ne prédit pas de relance (mesure du 5 octobre 2026).
+- Les montants de remplissage (9 999 999 €, 99 999 999 €…) sont ignorés ; les totaux des fiches excluent les montants supérieurs à un milliard d'euros.
+- Les titulaires des avis BOAMP nationaux sont lus dans un texte libre : le nom est retrouvé dans environ 85 % des attributions, le SIRET rarement (mesure sur une semaine d'octobre 2026). TED donne le SIREN ou le SIRET dans environ 4 attributions sur 10.
 
 Sources sous Licence Ouverte : DECP (ministère de l'Économie), BOAMP (DILA), TED (Office des publications de l'UE).

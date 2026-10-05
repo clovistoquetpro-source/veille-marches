@@ -7,11 +7,14 @@ export default function Accueil() {
       <p className="mt-3 text-gray-700">
         Ce qui sort aujourd&apos;hui, et ce qui sortira dans un an. Site en construction.
       </p>
-      <p className="mt-6">
-        <Link href="/renouvellements" className="underline">
-          Voir les marchés qui arrivent à échéance
-        </Link>
-      </p>
+      <ul className="mt-6 list-disc space-y-2 pl-5">
+        <li>
+          <Link href="/avis" className="underline">Les appels d&apos;offres publiés</Link> (BOAMP et TED, chaque matin)
+        </li>
+        <li>
+          <Link href="/renouvellements" className="underline">Les marchés qui arrivent à échéance</Link> dans les 12 mois
+        </li>
+      </ul>
     </main>
   );
 }
