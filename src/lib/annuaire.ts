@@ -37,19 +37,35 @@ type Resultat = {
   matching_etablissements?: Etablissement[] | null;
 };
 
-/** Cherche un SIREN (9 chiffres) ou un SIRET (14 chiffres). Renvoie null si l'annuaire ne connaît pas. */
-export async function chercherEntreprise(identifiant: string): Promise<FicheAnnuaire | null> {
+/** L'annuaire n'a pas répondu (panne, limite de débit) : ce n'est pas la même chose qu'un numéro inconnu. */
+export const INDISPONIBLE = "indisponible";
+
+/**
+ * Cherche un SIREN (9 chiffres) ou un SIRET (14 chiffres). Renvoie null si l'annuaire ne connaît pas
+ * le numéro, et `INDISPONIBLE` s'il ne répond toujours pas après `essais` tentatives.
+ */
+export async function chercherEntreprise(
+  identifiant: string,
+  essais = 3,
+): Promise<FicheAnnuaire | null | typeof INDISPONIBLE> {
   const numero = identifiant.replace(/\D/g, "");
   if (numero.length !== 9 && numero.length !== 14) return null;
   const url = `${RECHERCHE}?q=${numero}&per_page=1&minimal=false`;
   let resultat: Resultat | undefined;
-  try {
-    const reponse = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!reponse.ok) return null;
-    const corps = (await reponse.json()) as { results?: Resultat[] };
-    resultat = corps.results?.[0];
-  } catch {
-    return null;
+  for (let essai = 1; ; essai++) {
+    try {
+      const reponse = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      if (reponse.ok) {
+        resultat = ((await reponse.json()) as { results?: Resultat[] }).results?.[0];
+        break;
+      }
+      // au-delà de 7 requêtes par seconde, l'API répond 429 : on réessaie un peu plus tard, comme sur une panne
+      if (reponse.status !== 429 && reponse.status < 500) return null;
+    } catch {
+      // coupure réseau ou délai dépassé : on réessaie
+    }
+    if (essai >= essais) return INDISPONIBLE;
+    await new Promise((r) => setTimeout(r, 1000 * essai));
   }
   if (!resultat || resultat.siren !== numero.slice(0, 9)) return null;
   const etablissement = numero.length === 14

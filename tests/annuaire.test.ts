@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chercherEntreprise } from "../src/lib/annuaire";
+import { chercherEntreprise, INDISPONIBLE } from "../src/lib/annuaire";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -38,16 +38,27 @@ describe("annuaire des entreprises", () => {
     });
   });
 
-  it("ne renvoie rien si le numéro est mal formé, inconnu, ou si l'API est en panne", async () => {
+  it("ne renvoie rien si le numéro est mal formé ou inconnu", async () => {
     reponse(REPONSE);
     expect(await chercherEntreprise("4828185")).toBeNull();
     reponse({ results: [] });
     expect(await chercherEntreprise("123456789")).toBeNull();
     reponse(REPONSE);
     expect(await chercherEntreprise("123456789")).toBeNull(); // l'annuaire a répondu une autre entreprise
+    reponse({}, 400);
+    expect(await chercherEntreprise("482818523")).toBeNull();
+  });
+
+  it("distingue une panne d'un numéro inconnu, et réessaie quand l'API limite le débit", async () => {
     reponse({}, 500);
-    expect(await chercherEntreprise("482818523")).toBeNull();
+    expect(await chercherEntreprise("482818523", 1)).toBe(INDISPONIBLE);
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
-    expect(await chercherEntreprise("482818523")).toBeNull();
+    expect(await chercherEntreprise("482818523", 1)).toBe(INDISPONIBLE);
+    const appels = vi.fn()
+      .mockResolvedValueOnce(new Response("{}", { status: 429 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(REPONSE)));
+    vi.stubGlobal("fetch", appels);
+    expect(await chercherEntreprise("482818523", 2)).toMatchObject({ nom: "HTP CENTRE EST" });
+    expect(appels).toHaveBeenCalledTimes(2);
   });
 });
