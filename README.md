@@ -94,10 +94,12 @@ l'onglet *Actions*.
 3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY`,
    `CLOUDFLARE_API_TOKEN` (jeton créé avec le modèle *Edit Cloudflare Workers*) et `CLOUDFLARE_ACCOUNT_ID` ;
    variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports, les alertes et le déploiement sont sautés.
-4. Dans Cloudflare, `npx wrangler secret put` pour `DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`,
-   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET` ; les variables `SITE_URL` et `EDITEUR_*` se
-   saisissent dans le tableau de bord du Worker (*Settings > Variables*) et sont conservées à chaque
-   déploiement (`keep_vars`).
+4. Les secrets du site (`DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`, `STRIPE_SECRET_KEY`,
+   `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET`) se saisissent aussi dans GitHub : chaque déploiement les copie
+   dans le Worker (`wrangler secret bulk`). Les variables `SITE_URL` et `EDITEUR_*` se saisissent dans le
+   tableau de bord du Worker (*Settings > Variables*) et sont conservées à chaque déploiement (`keep_vars`).
+   L'offre gratuite de Workers ne suffit pas : elle coupe chaque requête après 10 ms de calcul, et les
+   pages avec des données en demandent une vingtaine. Il faut l'offre Workers Paid (5 $ par mois).
 5. Dans Stripe, déclarer le point d'entrée `https://…/api/stripe` pour les événements
    `checkout.session.completed`, `customer.subscription.*` et `invoice.payment_failed`.
 

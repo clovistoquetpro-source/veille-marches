@@ -49,3 +49,22 @@ jobs:
       - name: Construire et déployer sur Cloudflare Workers
         if: steps.config.outputs.pret == 'true'
         run: npm run deploy
+      # Les secrets du site se gèrent au même endroit que ceux des imports : dans GitHub.
+      - name: Copier les secrets du site dans le Worker
+        if: steps.config.outputs.pret == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_PRIX: ${{ secrets.STRIPE_PRIX }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+        run: |
+          node -e '
+            const noms = ["DATABASE_URL", "ANTHROPIC_API_KEY", "BREVO_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_PRIX", "STRIPE_WEBHOOK_SECRET"];
+            const presents = noms.filter((nom) => process.env[nom]);
+            const valeurs = Object.fromEntries(presents.map((nom) => [nom, process.env[nom]]));
+            require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/secrets.json", JSON.stringify(valeurs), { mode: 0o600 });
+            console.log("Secrets copiés : " + (presents.join(", ") || "aucun"));
+          '
+          npx wrangler secret bulk "$RUNNER_TEMP/secrets.json"
+          rm -f "$RUNNER_TEMP/secrets.json"
