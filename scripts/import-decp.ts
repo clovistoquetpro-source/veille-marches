@@ -1,5 +1,5 @@
 /**
- * Télécharge les DECP, les nettoie et remplace les marchés en base.
+ * Télécharge les DECP, les nettoie et met à jour les marchés en base (seulement ceux qui ont changé).
  * Usage : DATABASE_URL=… npm run import:decp
  */
 import { DuckDBInstance } from "@duckdb/node-api";
@@ -7,7 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
-import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
+import { chargerDecp, exporterEnBase, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, type FormatDecp, normaliser, urlExport } from "../src/ingest/decp";
 import { telecharger } from "../src/ingest/telechargement";
 
@@ -29,8 +29,10 @@ async function main() {
       console.log("Nettoyage…");
       const duck = await (await DuckDBInstance.create(":memory:")).connect();
       await normaliser(duck, sources);
-      const fichiers = await exporterCsv(duck, dossier);
-      console.log("Chargement en base…");
+      const enBase = path.join(dossier, "en-base.csv");
+      await exporterEnBase(sql, enBase);
+      const fichiers = await exporterCsv(duck, dossier, { enBase });
+      console.log(`Chargement en base : ${fichiers.nbAjoutes} marchés nouveaux ou modifiés, ${fichiers.nbSupprimes} retirés…`);
       return chargerDecp(sql, fichiers);
     });
     console.log(`${lignes} marchés importés.`);

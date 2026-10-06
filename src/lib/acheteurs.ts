@@ -58,7 +58,7 @@ export async function ficheAcheteur(sql: postgres.Sql, siret: string): Promise<F
         select max(t.siren) as siren, min(t.titulaire_id) as identifiant, max(te.nom) as nom,
           count(*)::int as marches, sum(m.montant) filter (where m.montant <= ${MONTANT_PLAUSIBLE})::float as montant
         from marches m
-        join marches_titulaires t on t.marche_uid = m.uid
+        join marches_titulaires t on t.marche_id = m.id
         left join entreprises te on te.siren = t.siren
         where m.acheteur_siret = b.siret
         group by coalesce(t.siren, t.titulaire_id)
@@ -66,7 +66,7 @@ export async function ficheAcheteur(sql: postgres.Sql, siret: string): Promise<F
       ) x), '[]') as titulaires,
       coalesce((select json_agg(x) from (
         select r.uid, r.objet, r.cpv, r.montant::float as montant, r.date_fin_estimee::text as date_fin_estimee,
-          r.deja_relance_le::text as deja_relance_le, ${titulairesJson(sql, sql`r.uid`)} as titulaires
+          r.deja_relance_le::text as deja_relance_le, ${titulairesJson(sql, sql`r.id`)} as titulaires
         from renouvellements r where r.acheteur_siret = b.siret
         order by r.date_fin_estimee, r.montant desc nulls last limit 20
       ) x), '[]') as renouvellements,

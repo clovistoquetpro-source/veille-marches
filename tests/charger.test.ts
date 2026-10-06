@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { type Avis, enregistrerAvis } from "../src/ingest/avis";
-import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
+import { type Avis, enregistrerAvis, purgerAvis } from "../src/ingest/avis";
+import { chargerDecp, exporterEnBase, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, normaliser } from "../src/ingest/decp";
 import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
@@ -64,10 +64,14 @@ describe.skipIf(!locale)("charger les DECP dans PostgreSQL", () => {
     await con.run(`create table src_2019 as select * replace (id || '00' as id), 'Ville de Test' as acheteur_nom
       from src_2022 where id = 'S2'`);
     await normaliser(con, { "2019": "src_2019", "2022": "src_2022" });
-    const fichiers = await exporterCsv(con, await mkdtemp(path.join(tmpdir(), "decp-test-")));
+    const dossier = await mkdtemp(path.join(tmpdir(), "decp-test-"));
+    const fichiers = await exporterCsv(con, dossier);
     await journaliser(sql, "decp", () => chargerDecp(sql, fichiers));
-    // Un second chargement remplace les données au lieu de les dupliquer.
-    await chargerDecp(sql, fichiers);
+    // Un second import des mêmes données ne change rien.
+    await exporterEnBase(sql, path.join(dossier, "en-base.csv"));
+    const second = await exporterCsv(con, dossier, { enBase: path.join(dossier, "en-base.csv") });
+    expect([second.nbAjoutes, second.nbSupprimes]).toEqual([0, 0]);
+    await chargerDecp(sql, second);
   });
 
   afterAll(async () => {
@@ -82,19 +86,19 @@ describe.skipIf(!locale)("charger les DECP dans PostgreSQL", () => {
     expect(compte).toEqual({ marches: 4, titulaires: 4, acheteurs: 1 });
     const [titulaire] = await sql`select siren from marches_titulaires where titulaire_id = '11111111100011'`;
     expect(titulaire.siren).toBe("111111111");
-    await sql`insert into marches_titulaires (marche_uid, titulaire_id, type_identifiant)
-      select uid, '444444444', 'SIRET' from marches where id_marche = 'S1'`;
+    await sql`insert into marches_titulaires (marche_id, titulaire_id, type_identifiant)
+      select id, '444444444', 'SIRET' from marches where uid = '21690123100011-S1'`;
     const [siren] = await sql`select siren from marches_titulaires where titulaire_id = '444444444'`;
     expect(siren.siren).toBe("444444444");
     await sql`delete from marches_titulaires where titulaire_id = '444444444'`;
   });
 
   it("liste seulement les services et fournitures qui finissent dans les 12 mois", async () => {
-    const lignes = await sql`select id_marche, deja_relance_le is not null as deja_relance
-      from renouvellements order by id_marche`;
+    const lignes = await sql`select uid, deja_relance_le is not null as deja_relance
+      from renouvellements order by uid`;
     expect(lignes).toEqual([
-      { id_marche: "S1", deja_relance: true },
-      { id_marche: "S3", deja_relance: false },
+      { uid: "21690123100011-S1", deja_relance: true },
+      { uid: "21690123100011-S3", deja_relance: false },
     ]);
   });
 
@@ -406,18 +410,18 @@ describe.skipIf(!locale)("veille des concurrents", () => {
     sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
     await sql`insert into entreprises (siren, nom, active, diffusible) values (${CONCURRENT}, 'PROPRETE DU LYONNAIS', true, true)`;
     // deux lots du même marché notifiés il y a vingt jours, et un marché trop ancien pour être annoncé
-    const marche = (uid: string, objet: string, montant: number, notification: number) => ({
-      uid, id_marche: uid, acheteur_siret: ACHETEUR, objet, cpv: "90910000", famille: "services", renouvelable: true,
+    const marche = (id: number, uid: string, objet: string, montant: number, notification: number) => ({
+      id, uid, acheteur_siret: ACHETEUR, objet, cpv: "90910000", famille: "services", renouvelable: true,
       montant, date_notification: dansJours(notification), duree_mois: 12, date_fin_estimee: dansJours(notification + 365),
-      departement: "69", format: "2022",
+      departement: "69", empreinte: "00000000-0000-0000-0000-000000000000",
     });
     await sql`insert into marches ${sql([
-      marche("G1", "Nettoyage des crèches", 10000, -20),
-      marche("G2", "Nettoyage des crèches", 20000, -20),
-      marche("G3", "Vitrerie", 5000, -800),
+      marche(1001, "G1", "Nettoyage des crèches", 10000, -20),
+      marche(1002, "G2", "Nettoyage des crèches", 20000, -20),
+      marche(1003, "G3", "Vitrerie", 5000, -800),
     ])}`;
-    await sql`insert into marches_titulaires ${sql(["G1", "G2", "G3"].map((uid) => ({
-      marche_uid: uid, titulaire_id: `${CONCURRENT}00055`, type_identifiant: "SIRET",
+    await sql`insert into marches_titulaires ${sql([1001, 1002, 1003].map((id) => ({
+      marche_id: id, titulaire_id: `${CONCURRENT}00055`, type_identifiant: "SIRET",
     })))}`;
     // le BOAMP ne donne que le nom du titulaire, écrit autrement que dans la base Sirene
     await enregistrerAvis(sql, [avis({
@@ -509,5 +513,91 @@ describe.skipIf(!locale)("veille des concurrents", () => {
     expect(await envoyerAlertes(sql, async (c) => { envoyes.push(c); }, "hebdomadaire"))
       .toEqual({ envoyees: 0, erreurs: 0, sansNouveaute: 1 });
     expect(await gainsDesConcurrents(sql, compteId, { nonAnnonces: true })).toEqual([]);
+  });
+});
+
+describe.skipIf(!locale)("tenir dans l'offre gratuite de Supabase", () => {
+  let sql: postgres.Sql;
+  const con = DuckDBInstance.create(":memory:").then((instance) => instance.connect());
+  const colonnes = "id, acheteur_id, objet, codecpv, nature, procedure, montant, datenotification, dureemois, " +
+    "offresrecues, lieuexecution_code, lieuexecution_typecode, source, titulaire_id_1, titulaire_typeidentifiant_1, " +
+    "titulaire_id_2, titulaire_typeidentifiant_2, titulaire_id_3, titulaire_typeidentifiant_3";
+  const ligne = (id: string, objet: string, montant: number, notification: string, duree: number) =>
+    `('${id}', '${ACHETEUR}', '${objet}', '90910000-9', 'Marché', 'MAPA', ${montant}, '${notification}', ${duree}, ` +
+    `'2', '69', 'Code département', 'test', '11111111100011', 'SIRET', null, null, null, null)`;
+  // dix marchés qui ne bougent pas, un qui sera modifié, un qui disparaîtra, et un trop ancien pour être gardé
+  const stables = Array.from({ length: 10 }, (_, i) => ligne(`A${i}`, "Nettoyage", 1000 + i, dansJours(-180), 24));
+
+  async function importer(lignes: string[]) {
+    const duck = await con;
+    await duck.run(`create or replace table semaine as select * from (values ${lignes.join(", ")}) t(${colonnes})`);
+    await duck.run("create or replace table vide as select *, null::varchar as acheteur_nom from semaine limit 0");
+    await normaliser(duck, { "2019": "vide", "2022": "semaine" });
+    const dossier = await mkdtemp(path.join(tmpdir(), "decp-semaine-"));
+    await exporterEnBase(sql, path.join(dossier, "en-base.csv"));
+    const fichiers = await exporterCsv(duck, dossier, { enBase: path.join(dossier, "en-base.csv") });
+    await chargerDecp(sql, fichiers);
+    return fichiers;
+  }
+
+  const enBase = () => sql<{ uid: string; id: number; objet: string; titulaires: number }[]>`
+    select m.uid, m.id, m.objet, (select count(*)::int from marches_titulaires t where t.marche_id = m.id) as titulaires
+    from marches m order by m.uid`;
+
+  beforeAll(() => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  it("ne garde que trois ans de marchés, plus ceux encore en cours", async () => {
+    // les marchés des tests précédents disparaissent : plus d'un sur cinq, l'import se fait en deux temps
+    const fichiers = await importer([
+      ...stables,
+      ligne("B", "Vitrerie", 2000, dansJours(-180), 24),
+      ligne("C", "Espaces verts", 3000, dansJours(-180), 24),
+      ligne("ANCIEN", "Nettoyage", 4000, dansJours(-5 * 365), 12),
+      ligne("LONG", "Nettoyage", 5000, dansJours(-5 * 365), 120),
+    ]);
+    expect(fichiers).toMatchObject({ nbAjoutes: 13, nbSupprimes: 7 });
+    const marches = await enBase();
+    expect(marches.map((m) => m.uid.slice(ACHETEUR.length + 1))).toEqual([
+      "A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B", "C", "LONG",
+    ]);
+    expect(marches.every((m) => m.titulaires === 1)).toBe(true);
+  });
+
+  it("ne réécrit que les marchés modifiés, nouveaux ou disparus", async () => {
+    const avant = await enBase();
+    const fichiers = await importer([
+      ...stables,
+      ligne("B", "Vitrerie des écoles", 2000, dansJours(-180), 24),
+      ligne("D", "Désinfection", 6000, dansJours(-10), 12),
+      ligne("LONG", "Nettoyage", 5000, dansJours(-5 * 365), 120),
+    ]);
+    expect(fichiers).toMatchObject({ nbAjoutes: 2, nbSupprimes: 2 });
+    const apres = await enBase();
+    const parUid = (lignes: typeof avant) => new Map(lignes.map((m) => [m.uid.slice(ACHETEUR.length + 1), m]));
+    const [a, b] = [parUid(avant), parUid(apres)];
+    expect([...b.keys()]).toEqual(["A0", "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "B", "D", "LONG"]);
+    expect(b.get("A0")!.id).toBe(a.get("A0")!.id);
+    expect(b.get("B")).toMatchObject({ objet: "Vitrerie des écoles", titulaires: 1 });
+    expect(b.get("B")!.id).toBeGreaterThan(Math.max(...avant.map((m) => m.id)));
+    const [{ titulaires }] = await sql`select count(*)::int as titulaires from marches_titulaires`;
+    expect(titulaires).toBe(13);
+  });
+
+  it("supprime les avis de plus de six mois dont la date limite est passée", async () => {
+    await enregistrerAvis(sql, [
+      avis({ uid: "boamp-25-1", numero: "25-1", date_publication: dansJours(-200), date_limite: null }),
+      avis({ uid: "boamp-25-2", numero: "25-2", date_publication: dansJours(-200), date_limite: dansJours(-150) }),
+      avis({ uid: "boamp-25-3", numero: "25-3", date_publication: dansJours(-200), date_limite: dansJours(10) }),
+      avis({ uid: "boamp-26-9", numero: "26-9", date_publication: dansJours(-100), date_limite: null }),
+    ]);
+    expect(await purgerAvis(sql)).toBe(2);
+    const restants = await sql`select uid from avis where uid in ('boamp-25-1', 'boamp-25-2', 'boamp-25-3', 'boamp-26-9') order by uid`;
+    expect(restants.map((r) => r.uid)).toEqual(["boamp-25-3", "boamp-26-9"]);
   });
 });

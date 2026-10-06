@@ -117,6 +117,8 @@ export async function normaliser(
 
   // Un même marché peut apparaître plusieurs fois (modifications, doublons entre sources ou entre
   // formats) : on garde la ligne de notification la plus ancienne, en préférant le nouveau format.
+  // À égalité, l'empreinte de la ligne entière tranche : deux imports des mêmes données gardent les
+  // mêmes lignes, sinon l'import réécrirait chaque semaine des milliers de marchés inchangés.
   // Les marchés transmis par la DGFIP figurent dans les deux formats sous deux identifiants différents
   // (« 20220118 » et « 2022011800 ») : on les reconnaît au même acheteur, même date, même montant,
   // même objet, même CPV et mêmes titulaires (dont l'ordre peut changer d'un format à l'autre : on
@@ -126,7 +128,7 @@ export async function normaliser(
     with par_identifiant as (
       select *, row_number() over (
         partition by acheteur_siret, id_marche
-        order by date_notification, format desc
+        order by date_notification, format desc, hash(decp_brut)
       ) as rang
       from decp_brut
     ),
@@ -196,30 +198,97 @@ export async function normaliser(
     )
     select distinct on (uid, titulaire_id) uid as marche_uid, titulaire_id, type_identifiant
     from titulaires
-    where titulaire_id is not null`);
+    where titulaire_id is not null
+    order by uid, titulaire_id, type_identifiant`);
 }
 
-/** Écrit les trois fichiers CSV que `chargerDecp` sait lire. */
-export async function exporterCsv(con: DuckDBConnection, dossier: string): Promise<FichiersDecp> {
+/**
+ * Années de marchés gardées en base, en plus des marchés encore en cours : de quoi voir ce que chaque
+ * acheteur achète et repérer les relances, tout en tenant dans les 500 Mo de l'offre gratuite de Supabase.
+ */
+export const ANNEES_HISTORIQUE = 3;
+
+/** Date (AAAA-MM-JJ) d'il y a `annees` ans. */
+export function ilYaAns(annees: number, aujourdhui = new Date()): string {
+  const date = new Date(aujourdhui);
+  date.setUTCFullYear(date.getUTCFullYear() - annees);
+  return date.toISOString().slice(0, 10);
+}
+
+export type FichiersDecp = {
+  /** marchés nouveaux ou modifiés, avec leur nouvel `id` */
+  marches: string;
+  titulaires: string;
+  acheteurs: string;
+  /** `id` des marchés en base à supprimer : disparus des DECP, sortis de l'historique ou modifiés */
+  supprimes: string;
+  nbAjoutes: number;
+  nbSupprimes: number;
+};
+
+/**
+ * Compare les marchés nettoyés à ceux déjà en base et écrit les fichiers CSV que `chargerDecp` sait
+ * lire : on ne réécrit que ce qui a changé, pour que l'import ne double jamais la taille de la base.
+ * `enBase` est un CSV (uid, id, empreinte) des marchés en base, absent au premier import. On garde les
+ * marchés notifiés depuis `depuis` (AAAA-MM-JJ) ou qui ne sont pas encore finis.
+ */
+export async function exporterCsv(
+  con: DuckDBConnection,
+  dossier: string,
+  { enBase, depuis = ilYaAns(ANNEES_HISTORIQUE) }: { enBase?: string; depuis?: string } = {},
+): Promise<FichiersDecp> {
   const fichiers = {
     marches: `${dossier}/marches.csv`,
     titulaires: `${dossier}/titulaires.csv`,
     acheteurs: `${dossier}/acheteurs.csv`,
+    supprimes: `${dossier}/supprimes.csv`,
   };
+  await con.run(enBase
+    ? `create or replace table en_base as select * from read_csv(${texte(enBase)}, header = true,
+        columns = {'uid': 'VARCHAR', 'id': 'INTEGER', 'empreinte': 'VARCHAR'})`
+    : "create or replace table en_base (uid varchar, id integer, empreinte varchar)");
+  await con.run(`
+    create or replace table retenus as
+    with liste as (
+      select marche_uid, string_agg(titulaire_id || ' ' || coalesce(type_identifiant, ''), ',' order by titulaire_id) as titulaires
+      from titulaires_norm group by 1
+    )
+    select m.*, md5(cast(row(
+      m.uid, m.objet, m.cpv, m.famille, m.renouvelable, m.montant, m.date_notification, m.duree_mois,
+      m.date_fin_estimee, m.offres_recues, m.departement, l.titulaires
+    ) as varchar)) as empreinte
+    from marches_norm m left join liste l on l.marche_uid = m.uid
+    where m.date_notification >= date ${texte(depuis)} or m.date_fin_estimee >= current_date`);
+  await con.run(`
+    create or replace table supprimes as
+    select b.id from en_base b anti join retenus r on r.uid = b.uid and r.empreinte = b.empreinte`);
+  // Les nouveaux identifiants suivent le plus grand déjà attribué : jamais deux fois le même. Les
+  // fichiers sont triés par identifiant : les index se remplissent dans l'ordre et restent compacts.
+  await con.run(`
+    create or replace table ajoutes as
+    select r.*, (select coalesce(max(id), 0) from en_base) + row_number() over (order by r.uid) as id
+    from retenus r anti join en_base b on b.uid = r.uid and b.empreinte = r.empreinte`);
+  await con.run(`copy (select id from supprimes order by id) to ${texte(fichiers.supprimes)} (header, delimiter ',')`);
   await con.run(`
     copy (
-      select uid, id_marche, acheteur_siret, objet, cpv, famille, renouvelable, nature, procedure,
-        montant, date_notification, duree_mois, date_fin_estimee, offres_recues, departement,
-        source, format
-      from marches_norm
+      select id, uid, acheteur_siret, objet, cpv, famille, renouvelable, montant, date_notification,
+        duree_mois, date_fin_estimee, offres_recues, departement, empreinte
+      from ajoutes order by id
     ) to ${texte(fichiers.marches)} (header, delimiter ',')`);
-  await con.run(`copy titulaires_norm to ${texte(fichiers.titulaires)} (header, delimiter ',')`);
+  await con.run(`
+    copy (
+      select a.id as marche_id, t.titulaire_id, t.type_identifiant
+      from titulaires_norm t join ajoutes a on a.uid = t.marche_uid
+      order by a.id, t.titulaire_id
+    ) to ${texte(fichiers.titulaires)} (header, delimiter ',')`);
   await con.run(`
     copy (
       select acheteur_siret as siret, max(acheteur_nom) as nom
-      from decp_brut where acheteur_siret in (select acheteur_siret from marches_norm) group by 1
+      from decp_brut where acheteur_siret in (select acheteur_siret from ajoutes) group by 1
     ) to ${texte(fichiers.acheteurs)} (header, delimiter ',')`);
-  return fichiers;
+  const compte = await con.runAndReadAll(
+    "select (select count(*) from ajoutes)::integer as ajoutes, (select count(*) from supprimes)::integer as supprimes",
+  );
+  const [nbAjoutes, nbSupprimes] = compte.getRows()[0] as [number, number];
+  return { ...fichiers, nbAjoutes, nbSupprimes };
 }
-
-export type FichiersDecp = { marches: string; titulaires: string; acheteurs: string };

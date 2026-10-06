@@ -53,7 +53,7 @@ export async function renouvellementsDuProfil(
     select r.uid, r.objet, r.acheteur_siret as acheteur, coalesce(e.nom, a.nom) as acheteur_nom, r.famille,
       r.cpv, r.montant::float as montant, r.date_fin_estimee::text as date_fin_estimee, r.duree_mois,
       r.offres_recues, r.deja_relance_le::text as deja_relance_le,
-      ${titulairesJson(sql, sql`r.uid`)} as titulaires
+      ${titulairesJson(sql, sql`r.id`)} as titulaires
     from renouvellements r
     left join acheteurs a on a.siret = r.acheteur_siret
     left join entreprises e on e.siren = left(r.acheteur_siret, 9)
