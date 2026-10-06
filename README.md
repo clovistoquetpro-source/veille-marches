@@ -84,14 +84,20 @@ Les alertes ne partent qu'aux comptes dont l'accès est ouvert (abonnement en co
 
 ## Mise en ligne
 
-Le site tourne sur Cloudflare Workers (`npm run deploy`) et la base sur Supabase.
+Le site tourne sur Cloudflare Workers et la base sur Supabase. Chaque fusion dans `main` dont la CI
+passe est déployée par le workflow `deploiement.yml` : il met la base à jour (`db:migrer`) puis lance
+`npm run deploy`. Il est sauté tant que les secrets Cloudflare manquent, et se relance à la main depuis
+l'onglet *Actions*.
 
 1. Créer le projet Supabase (région UE), récupérer la chaîne de connexion en mode *Transaction*.
 2. `DATABASE_URL=… npm run db:migrer`, puis les imports (`import:decp`, `import:sirene`, `import:avis`).
-3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY` ;
-   variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports et les alertes sont sautés.
+3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY`,
+   `CLOUDFLARE_API_TOKEN` (jeton créé avec le modèle *Edit Cloudflare Workers*) et `CLOUDFLARE_ACCOUNT_ID` ;
+   variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports, les alertes et le déploiement sont sautés.
 4. Dans Cloudflare, `npx wrangler secret put` pour `DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`,
-   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET`, et les variables `SITE_URL` et `EDITEUR_*`.
+   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET` ; les variables `SITE_URL` et `EDITEUR_*` se
+   saisissent dans le tableau de bord du Worker (*Settings > Variables*) et sont conservées à chaque
+   déploiement (`keep_vars`).
 5. Dans Stripe, déclarer le point d'entrée `https://…/api/stripe` pour les événements
    `checkout.session.completed`, `customer.subscription.*` et `invoice.payment_failed`.
 

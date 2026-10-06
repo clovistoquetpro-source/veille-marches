@@ -1,0 +1,51 @@
+name: Déploiement
+
+# Met le site en ligne sur Cloudflare après chaque fusion dans main, une fois la CI passée.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploiement
+  cancel-in-progress: false
+
+jobs:
+  deployer:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Vérifier que Cloudflare est configuré
+        id: config
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "Secrets CLOUDFLARE_API_TOKEN ou CLOUDFLARE_ACCOUNT_ID absents : déploiement ignoré."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pret == 'true'
+        with:
+          # la version que la CI vient de valider, pas une fusion arrivée entre-temps
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        if: steps.config.outputs.pret == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.config.outputs.pret == 'true'
+      - name: Mettre la base à jour avant le nouveau code
+        if: steps.config.outputs.pret == 'true' && env.DATABASE_URL != ''
+        run: npm run db:migrer
+      - name: Construire et déployer sur Cloudflare Workers
+        if: steps.config.outputs.pret == 'true'
+        run: npm run deploy
