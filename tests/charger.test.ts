@@ -13,6 +13,7 @@ import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, normaliser } from "../src/ingest/decp";
 import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
+import { abonnementDuCompte, majAbonnement, ouvrirEssai } from "../src/lib/abonnements";
 import { destinataires, envoyerAlertes } from "../src/lib/alertes";
 import { compteDeLaSession, creerCompte, desinscrire, fermerSession, ouvrirSession } from "../src/lib/comptes";
 import type { Courriel } from "../src/lib/courriel";
@@ -304,11 +305,13 @@ describe.skipIf(!locale)("alertes par courriel", () => {
     await enregistrerProfil(sql, compte.id, {
       cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "historique", frequence: "hebdomadaire",
     });
+    await ouvrirEssai(sql, compte.id);
     // un compte sans code CPV ni mot-clé ne doit jamais recevoir de courriel
     const vide = await creerCompte(sql, { email: "vide@exemple.fr", siren: null, siret: null, nom: null });
     await enregistrerProfil(sql, vide.id, {
       cpv: [], mots_cles: [], departements: [], origine: "manuel", frequence: "hebdomadaire",
     });
+    await ouvrirEssai(sql, vide.id);
   });
 
   afterAll(async () => {
@@ -352,6 +355,18 @@ describe.skipIf(!locale)("alertes par courriel", () => {
     const [erreur] = await sql`select statut, message from alertes order by id desc limit 1`;
     expect(erreur).toMatchObject({ statut: "erreur", message: "Brevo : erreur 500" });
     // rien n'a été retenu comme annoncé : le prochain passage reprend le même contenu
+    expect((await envoyerAlertes(sql, envoyeur, "hebdomadaire")).envoyees).toBe(1);
+  });
+
+  it("n'écrit plus quand l'essai est fini, et reprend quand l'abonnement est payé", async () => {
+    const [compte] = await sql<{ id: string }[]>`select id from comptes where email = 'alerte@exemple.fr'`;
+    await sql`delete from alertes_avis`;
+    await sql`delete from alertes_marches`;
+    await sql`update abonnements set fin_essai = current_date - 1 where compte_id = ${compte.id}`;
+    expect((await destinataires(sql, "hebdomadaire")).map((d) => d.email)).toEqual([]);
+
+    await majAbonnement(sql, compte.id, { statut: "actif", client_stripe: "cus_1", abonnement_stripe: "sub_1" });
+    expect(await abonnementDuCompte(sql, compte.id)).toMatchObject({ statut: "actif", client_stripe: "cus_1" });
     expect((await envoyerAlertes(sql, envoyeur, "hebdomadaire")).envoyees).toBe(1);
   });
 

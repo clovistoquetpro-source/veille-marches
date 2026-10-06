@@ -14,7 +14,8 @@ const eslintConfig = [
   {
     rules: {
       // `const { a, ...reste } = objet` sert à retirer une propriété
-      "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true }],
+      // les actions de formulaire reçoivent l'état précédent et le FormData, même sans s'en servir
+      "@typescript-eslint/no-unused-vars": ["warn", { ignoreRestSiblings: true, argsIgnorePattern: "^_" }],
     },
   },
   {

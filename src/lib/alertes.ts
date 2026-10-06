@@ -56,9 +56,13 @@ export async function destinataires(sql: postgres.Sql, frequence: Frequence): Pr
         'cpv', array_to_json(p.cpv), 'mots_cles', array_to_json(p.mots_cles),
         'departements', array_to_json(p.departements), 'origine', p.origine
       ) as profil
-    from comptes c join profils p on p.compte_id = c.id
+    from comptes c
+    join profils p on p.compte_id = c.id
+    left join abonnements ab on ab.compte_id = c.id
     where p.frequence = ${frequence}
       and (cardinality(p.cpv) > 0 or cardinality(p.mots_cles) > 0)
+      -- on n'écrit qu'aux clients dont l'accès est ouvert : abonnement en cours ou essai non échu
+      and (ab.statut in ('actif', 'en_retard') or (ab.statut = 'essai' and ab.fin_essai >= current_date))
     order by c.cree_le`;
 }
 

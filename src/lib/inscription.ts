@@ -5,6 +5,7 @@
  */
 import type postgres from "postgres";
 import { chercherEntreprise, type FicheAnnuaire } from "./annuaire";
+import { ouvrirEssai } from "./abonnements";
 import { type Compte, creerCompte, normaliserEmail } from "./comptes";
 import { profilParIa } from "./ia";
 import {
@@ -64,5 +65,6 @@ export async function inscrire(
     nom: entreprise.nom,
   });
   await enregistrerProfil(sql, compte.id, profil);
+  await ouvrirEssai(sql, compte.id);
   return { ok: true, compte, profil, entreprise };
 }
