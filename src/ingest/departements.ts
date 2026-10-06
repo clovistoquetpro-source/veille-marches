@@ -50,10 +50,13 @@ export function departementDuCodePostal(codePostal: string): string | null {
   return cp.slice(0, 2);
 }
 
-/** Code département tel que publié par le BOAMP (« 6 », « 06 », « 2A », « 971 »). */
+/**
+ * Code département tel que publié par le BOAMP (« 6 », « 06 », « 2A », « 971 »), ou saisi par un
+ * client. « 20 » (la Corse avant 1976) et les codes qui ne désignent aucun département sont écartés.
+ */
 export function normaliserDepartement(code: string): string | null {
   const d = code.trim().toUpperCase();
-  if (/^\d$/.test(d)) return `0${d}`;
-  if (/^(\d{2}|2A|2B|97\d)$/.test(d) && d !== "00" && d !== "20") return d;
+  const deux = /^\d$/.test(d) ? `0${d}` : d;
+  if (/^(0[1-9]|[1-8]\d|9[0-5]|2A|2B|9[78]\d)$/.test(deux) && deux !== "20") return deux;
   return null;
 }

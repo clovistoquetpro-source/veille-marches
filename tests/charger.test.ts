@@ -7,14 +7,18 @@ import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import postgres from "postgres";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { type Avis, enregistrerAvis } from "../src/ingest/avis";
 import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, normaliser } from "../src/ingest/decp";
 import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
+import { compteDeLaSession, creerCompte, fermerSession, ouvrirSession } from "../src/lib/comptes";
+import { avisDuProfil, renouvellementsDuProfil } from "../src/lib/correspondance";
 import { listerAvis } from "../src/lib/avis";
 import { ficheEntreprise } from "../src/lib/entreprises";
+import { profilPropose } from "../src/lib/inscription";
+import { enregistrerProfil, profilDuCompte } from "../src/lib/profil";
 import { listerRenouvellements } from "../src/lib/renouvellements";
 
 const url = process.env.DATABASE_URL_TEST;
@@ -209,5 +213,73 @@ describe.skipIf(!locale)("avis, entreprises et fiches", () => {
     // entrepreneur individuel qui refuse la diffusion : fiche sans nom
     expect(await ficheEntreprise(sql, "222222222")).toMatchObject({ nom: null, diffusible: false });
     expect(await ficheEntreprise(sql, "999999999")).toBeNull();
+  });
+});
+
+/** Suite des précédentes : inscription, profil de veille et marchés qui en découlent. */
+describe.skipIf(!locale)("comptes et veille personnalisée", () => {
+  let sql: postgres.Sql;
+
+  beforeAll(() => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+    // sans clé d'API, le profil de repli est déduit de l'activité déclarée : le test reste hors ligne
+    vi.stubEnv("ANTHROPIC_API_KEY", "");
+  });
+
+  afterAll(async () => {
+    vi.unstubAllEnvs();
+    await sql?.end();
+  });
+
+  const annuaire = {
+    siren: "111111111", siret: "11111111100011", nom: "NETTOYAGE DU RHONE", naf: "81.21Z",
+    departement: "01", commune: "BOURG-EN-BRESSE", active: true,
+  };
+
+  it("propose à une entreprise connue le profil de ses marchés déjà gagnés", async () => {
+    // un seul marché gagné : pas assez pour deviner, on retombe sur l'activité déclarée et son département
+    expect(await profilPropose(sql, annuaire)).toEqual({
+      cpv: [], mots_cles: ["nettoyage", "courant", "bâtiments"], departements: ["01"], origine: "manuel",
+    });
+  });
+
+  it("crée le compte, sa session et son profil, puis les retrouve", async () => {
+    const compte = await creerCompte(sql, {
+      email: "clo@exemple.fr", siren: annuaire.siren, siret: annuaire.siret, nom: annuaire.nom,
+    });
+    expect(compte).toMatchObject({ email: "clo@exemple.fr", siren: "111111111" });
+    // se réinscrire avec une autre entreprise ne crée pas un second compte
+    const encore = await creerCompte(sql, { email: "clo@exemple.fr", siren: "222222222", siret: null, nom: "AUTRE" });
+    expect(encore.id).toBe(compte.id);
+
+    const session = await ouvrirSession(sql, compte.id);
+    expect(await compteDeLaSession(sql, session)).toMatchObject({ id: compte.id, nom: "AUTRE" });
+    expect(await compteDeLaSession(sql, "inconnue")).toBeNull();
+    expect(await compteDeLaSession(sql, undefined)).toBeNull();
+    await sql`update sessions set expire_le = now() - interval '1 day' where id = ${session}`;
+    expect(await compteDeLaSession(sql, session)).toBeNull();
+    await fermerSession(sql, session);
+
+    await enregistrerProfil(sql, compte.id, {
+      cpv: ["90910000-9"], mots_cles: ["Gymnases"], departements: ["69"], origine: "historique",
+    });
+    expect(await profilDuCompte(sql, compte.id)).toEqual({
+      cpv: ["90910000"], mots_cles: ["gymnases"], departements: ["69"], origine: "historique",
+    });
+  });
+
+  it("remonte les avis en cours et les marchés à reconquérir du profil", async () => {
+    const profil = { cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "historique" as const };
+    expect((await avisDuProfil(sql, profil)).map((a) => a.uid)).toEqual(["boamp-26-1"]);
+    expect((await renouvellementsDuProfil(sql, profil)).map((r) => r.objet)).toEqual([
+      "Nettoyage", "Nettoyage des écoles",
+    ]);
+    // un mot-clé suffit, même sans code CPV ; un autre département ne remonte rien
+    expect((await avisDuProfil(sql, { ...profil, cpv: [], mots_cles: ["gymnase"] })).map((a) => a.uid)).toEqual([]);
+    expect(await avisDuProfil(sql, { ...profil, departements: ["75"] })).toEqual([]);
+    expect(await renouvellementsDuProfil(sql, { ...profil, departements: ["75"] })).toEqual([]);
+    // un profil vide ne remonte rien plutôt que tout
+    expect(await avisDuProfil(sql, { ...profil, cpv: [] })).toEqual([]);
+    expect(await renouvellementsDuProfil(sql, { ...profil, cpv: [] })).toEqual([]);
   });
 });

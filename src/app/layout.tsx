@@ -33,6 +33,7 @@ export default function RootLayout({
             <Link href="/" className="font-semibold">Radar des marchés publics</Link>
             <Link href="/avis">Avis publiés</Link>
             <Link href="/renouvellements">Renouvellements</Link>
+            <Link href="/veille" className="ml-auto">Ma veille</Link>
           </nav>
         </header>
         {children}
