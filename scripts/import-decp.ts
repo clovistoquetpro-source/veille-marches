@@ -3,24 +3,13 @@
  * Usage : DATABASE_URL=… npm run import:decp
  */
 import { DuckDBInstance } from "@duckdb/node-api";
-import { createWriteStream } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Readable } from "node:stream";
-import { pipeline } from "node:stream/promises";
-import type { ReadableStream } from "node:stream/web";
 import postgres from "postgres";
 import { chargerDecp, journaliser, migrer } from "../src/ingest/charger";
 import { exporterCsv, type FormatDecp, normaliser, urlExport } from "../src/ingest/decp";
-
-async function telecharger(url: string, fichier: string) {
-  const reponse = await fetch(url);
-  if (!reponse.ok || !reponse.body) {
-    throw new Error(`Téléchargement impossible (${reponse.status}) : ${url}`);
-  }
-  await pipeline(Readable.fromWeb(reponse.body as ReadableStream), createWriteStream(fichier));
-}
+import { telecharger } from "../src/ingest/telechargement";
 
 async function main() {
   const url = process.env.DATABASE_URL;

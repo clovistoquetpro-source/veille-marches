@@ -66,6 +66,7 @@ function titulaire(colonne: string, type: string): string {
   const brut = `regexp_replace(${colonne}::varchar, '\\s', '', 'g')`;
   return `case
     when ${colonne} is null or trim(${colonne}::varchar) in ('', 'CDL') or ${type} = 'CDL' then null
+    when ${brut} ~ '^0+$' then null
     when ${type} = 'SIRET' and ${brut} ~ '^\\d{12,14}$' then lpad(${brut}, 14, '0')
     else trim(${colonne}::varchar)
   end`;
@@ -110,6 +111,7 @@ export async function normaliser(
     select * from (${brut("2019")} union all ${brut("2022")})
     where id_marche is not null and id_marche <> ''
       and length(acheteur_siret) = 14
+      and acheteur_siret !~ '^0+$'
       and date_notification is not null`);
 
   // Un même marché peut apparaître plusieurs fois (modifications, doublons entre sources ou entre
@@ -152,7 +154,8 @@ export async function normaliser(
       end as famille,
       coalesce(division is not null and division not in ('45', '71'), false) as renouvelable,
       nature, procedure,
-      case when montant > 0 then montant end as montant,
+      -- 9 999 999 €, 99 999 999 €… : valeurs de remplissage des accords-cadres sans maximum
+      case when montant > 0 and cast(cast(montant as bigint) as varchar) !~ '^9{7,}$' then montant end as montant,
       date_notification,
       duree_valide as duree_mois,
       cast(date_notification + to_months(duree_valide) as date) as date_fin_estimee,
