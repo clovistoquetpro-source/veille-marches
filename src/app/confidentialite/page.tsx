@@ -17,6 +17,7 @@ export default function PageConfidentialite() {
         <li><strong>Votre adresse électronique</strong>, pour vous envoyer vos alertes et vous identifier.</li>
         <li><strong>Le SIRET de votre entreprise</strong>, pour en déduire votre profil de veille.</li>
         <li><strong>Votre profil de veille</strong> : codes CPV, mots-clés, départements, rythme des alertes.</li>
+        <li><strong>Les entreprises que vous suivez</strong>, pour vous prévenir des marchés qu&apos;elles gagnent.</li>
         <li><strong>Ce qui vous a déjà été annoncé</strong>, pour ne jamais vous écrire deux fois la même chose.</li>
         <li>
           <strong>Votre abonnement</strong> : son état et les identifiants que Stripe nous renvoie. Nous ne voyons

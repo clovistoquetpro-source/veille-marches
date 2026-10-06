@@ -53,13 +53,27 @@ La session est un identifiant tiré au sort, déposé dans un cookie et conserv�
 ## Alertes
 
 Chaque matin (ou le lundi, au choix du client), un courriel reprend les appels d'offres parus depuis
-la dernière alerte et les marchés qui entrent dans la fenêtre de relance, 6 à 12 mois avant leur fin.
+la dernière alerte, les marchés qui entrent dans la fenêtre de relance, 6 à 12 mois avant leur fin, et
+les marchés que ses concurrents suivis viennent de gagner.
 Rien n'est annoncé deux fois : les avis et les marchés envoyés sont retenus par compte. Les lots d'un
 même marché sont regroupés en une ligne, et un acheteur ne prend jamais plus de trois lignes.
 
 L'envoi passe par [Brevo](https://brevo.com) (secret `BREVO_API_KEY`) ; sans clé, les courriels sont
 affichés dans la console. Chaque courriel porte un lien de désinscription qui coupe les alertes sans
 supprimer le compte.
+
+## Veille des concurrents
+
+Le client suit jusqu'à 20 entreprises, depuis leur fiche, depuis `/veille` (par leur nom, leur SIREN ou
+leur SIRET), ou parmi les concurrents qu'on lui propose : celles qui gagnent le plus souvent les marchés
+de son profil depuis deux ans. Pour chacune, `/veille` montre ses marchés gagnés dans l'année, ceux qui
+arrivent à échéance (qu'on peut lui reprendre) et ses derniers gains.
+
+Un gain vient d'un avis d'attribution (BOAMP, TED) des 30 derniers jours, ou des DECP des 90 derniers
+jours (elles paraissent avec retard). Les avis du BOAMP donnent rarement le SIRET du titulaire : on
+les rapproche alors par le nom, débarrassé de sa forme juridique et de ses accents
+(`nom_simplifie`, 64 % des titulaires sans SIRET retrouvés). Un marché déjà connu par son avis
+d'attribution n'est pas annoncé une seconde fois quand il arrive dans les DECP.
 
 ## Abonnement
 

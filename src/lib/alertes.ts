@@ -1,10 +1,11 @@
 /**
  * Alertes par courriel. Chaque matin (ou chaque lundi), on envoie à chaque client les appels
- * d'offres qui viennent de paraître et les marchés qui entrent dans leur fenêtre de relance, sans
- * jamais répéter ce qu'on lui a déjà annoncé.
+ * d'offres qui viennent de paraître, les marchés qui entrent dans leur fenêtre de relance et ceux
+ * que ses concurrents viennent de gagner, sans jamais répéter ce qu'on lui a déjà annoncé.
  */
 import type postgres from "postgres";
 import { jetonDeDesinscription } from "./comptes";
+import { type Gain, gainsDesConcurrents } from "./concurrents";
 import { type Courriel, type Envoyeur } from "./courriel";
 import { criteresProfil, profilVide } from "./correspondance";
 import { euros, jour, mois } from "./format";
@@ -48,7 +49,7 @@ export function adresseSite(): string {
   return (process.env.SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }
 
-/** Clients à prévenir : ceux dont le profil peut remonter quelque chose. */
+/** Clients à prévenir : ceux dont le profil peut remonter quelque chose, ou qui suivent un concurrent. */
 export async function destinataires(sql: postgres.Sql, frequence: Frequence): Promise<Destinataire[]> {
   return sql<Destinataire[]>`
     select c.id as compte_id, c.email, c.nom, c.jeton,
@@ -60,7 +61,8 @@ export async function destinataires(sql: postgres.Sql, frequence: Frequence): Pr
     join profils p on p.compte_id = c.id
     left join abonnements ab on ab.compte_id = c.id
     where p.frequence = ${frequence}
-      and (cardinality(p.cpv) > 0 or cardinality(p.mots_cles) > 0)
+      and (cardinality(p.cpv) > 0 or cardinality(p.mots_cles) > 0
+        or exists (select 1 from concurrents co where co.compte_id = c.id))
       -- on n'écrit qu'aux clients dont l'accès est ouvert : abonnement en cours ou essai non échu
       and (ab.statut in ('actif', 'en_retard') or (ab.statut = 'essai' and ab.fin_essai >= current_date))
     order by c.cree_le`;
@@ -150,16 +152,23 @@ function echappe(texte: string): string {
   return texte.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 }
 
+/** « a, b et c » */
+function enumeration(morceaux: string[]): string {
+  return morceaux.length <= 1 ? morceaux.join("") : `${morceaux.slice(0, -1).join(", ")} et ${morceaux.at(-1)}`;
+}
+
 /** Objet et corps du courriel. L'ordre suit l'intérêt : d'abord ce qui se répond tout de suite. */
 export function composerAlerte(
   destinataire: Destinataire,
   avis: AvisAlerte[],
   marches: MarcheAlerte[],
+  gains: Gain[],
   site = adresseSite(),
 ): Courriel {
   const morceaux = [
     avis.length > 0 && pluriel(avis.length, "appel d'offres", "appels d'offres"),
     marches.length > 0 && pluriel(marches.length, "marché à reconquérir", "marchés à reconquérir"),
+    gains.length > 0 && pluriel(gains.length, "marché gagné par vos concurrents", "marchés gagnés par vos concurrents"),
   ].filter(Boolean) as string[];
 
   const lignesAvis = avis.map((a) => ({
@@ -182,6 +191,16 @@ export function composerAlerte(
     ].filter(Boolean).join(" · "),
     lien: `${site}/acheteurs/${m.acheteur}`,
   }));
+  const lignesGains = gains.map((g) => ({
+    titre: `${g.entreprise ?? "Un concurrent"} : ${g.objet ?? "objet non publié"}`,
+    detail: [
+      g.source === "avis" ? `attribution publiée le ${jour(g.date)}` : `notifié le ${jour(g.date)}`,
+      g.acheteur_nom,
+      g.nb_lots > 1 && `${g.nb_lots} lots`,
+      g.montant && (g.nb_lots > 1 ? `${euros(g.montant)} au total` : euros(g.montant)),
+    ].filter(Boolean).join(" · "),
+    lien: g.url ?? `${site}/entreprises/${g.siren}`,
+  }));
 
   const desinscription = destinataire.jeton ? `${site}/desinscription?jeton=${destinataire.jeton}` : `${site}/veille`;
   const section = (titre: string, lignes: typeof lignesAvis) =>
@@ -193,6 +212,7 @@ export function composerAlerte(
     `Voici ce qui concerne ${destinataire.nom ?? "votre entreprise"} :`,
     section("Appels d'offres qui viennent de paraître", lignesAvis),
     section("Marchés qui arrivent à échéance dans 6 à 12 mois", lignesMarches),
+    section("Ce que vos concurrents viennent de gagner", lignesGains),
     "",
     `Votre veille : ${site}/veille`,
     `Ne plus recevoir ces courriels : ${desinscription}`,
@@ -207,10 +227,11 @@ export function composerAlerte(
     `<p>Bonjour,</p><p>Voici ce qui concerne ${echappe(destinataire.nom ?? "votre entreprise")} :</p>` +
     sectionHtml("Appels d'offres qui viennent de paraître", lignesAvis) +
     sectionHtml("Marchés qui arrivent à échéance dans 6 à 12 mois", lignesMarches) +
+    sectionHtml("Ce que vos concurrents viennent de gagner", lignesGains) +
     `<p style="color:#555;font-size:13px"><a href="${echappe(site)}/veille">Voir ma veille</a> · ` +
     `<a href="${echappe(desinscription)}">Ne plus recevoir ces courriels</a></p></div>`;
 
-  return { a: destinataire.email, sujet: morceaux.join(" et "), texte, html };
+  return { a: destinataire.email, sujet: enumeration(morceaux), texte, html };
 }
 
 export type ResultatAlertes = { envoyees: number; erreurs: number; sansNouveaute: number };
@@ -227,20 +248,21 @@ export async function envoyerAlertes(
   const jours = frequence === "hebdomadaire" ? 8 : 2;
   const resultat: ResultatAlertes = { envoyees: 0, erreurs: 0, sansNouveaute: 0 };
   for (const destinataire of await destinataires(sql, frequence)) {
-    const [avis, marches] = await Promise.all([
+    const [avis, marches, gains] = await Promise.all([
       avisAAnnoncer(sql, destinataire.compte_id, destinataire.profil, jours),
       marchesAAnnoncer(sql, destinataire.compte_id, destinataire.profil),
+      gainsDesConcurrents(sql, destinataire.compte_id, { limite: 15, nonAnnonces: true }),
     ]);
-    if (avis.length === 0 && marches.length === 0) {
+    if (avis.length === 0 && marches.length === 0 && gains.length === 0) {
       resultat.sansNouveaute++;
       continue;
     }
     try {
       const jeton = destinataire.jeton ?? await jetonDeDesinscription(sql, destinataire.compte_id);
-      await envoyeur(composerAlerte({ ...destinataire, jeton }, avis, marches));
+      await envoyeur(composerAlerte({ ...destinataire, jeton }, avis, marches, gains));
       await sql.begin(async (tx) => {
-        await tx`insert into alertes (compte_id, nb_avis, nb_renouvellements, statut)
-          values (${destinataire.compte_id}, ${avis.length}, ${marches.length}, 'envoyee')`;
+        await tx`insert into alertes (compte_id, nb_avis, nb_renouvellements, nb_gains, statut)
+          values (${destinataire.compte_id}, ${avis.length}, ${marches.length}, ${gains.length}, 'envoyee')`;
         if (avis.length > 0) {
           await tx`insert into alertes_avis ${tx(avis.map((a) => ({ compte_id: destinataire.compte_id, avis_uid: a.uid })))}
             on conflict do nothing`;
@@ -251,12 +273,18 @@ export async function envoyerAlertes(
           );
           await tx`insert into alertes_marches ${tx(lots)} on conflict do nothing`;
         }
+        if (gains.length > 0) {
+          const annonces = gains.flatMap((g) =>
+            g.uids.map((uid) => ({ compte_id: destinataire.compte_id, source: g.source, uid })),
+          );
+          await tx`insert into alertes_gains ${tx(annonces)} on conflict do nothing`;
+        }
       });
       resultat.envoyees++;
     } catch (erreur) {
       resultat.erreurs++;
-      await sql`insert into alertes (compte_id, nb_avis, nb_renouvellements, statut, message)
-        values (${destinataire.compte_id}, ${avis.length}, ${marches.length}, 'erreur',
+      await sql`insert into alertes (compte_id, nb_avis, nb_renouvellements, nb_gains, statut, message)
+        values (${destinataire.compte_id}, ${avis.length}, ${marches.length}, ${gains.length}, 'erreur',
           ${erreur instanceof Error ? erreur.message.slice(0, 500) : String(erreur).slice(0, 500)})`;
     }
   }

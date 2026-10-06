@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { abonnementDuCompte, accesOuvert, joursDEssai } from "@/lib/abonnements";
 import { compteDeLaSession, COOKIE_SESSION } from "@/lib/comptes";
+import { MAX_CONCURRENTS } from "@/lib/concurrents";
 import { db } from "@/lib/db";
 import { JOURS_ESSAI, NOM, PRIX_MENSUEL } from "@/lib/produit";
 import { paiementConfigure } from "@/lib/stripe";
@@ -53,6 +54,7 @@ export default async function PageAbonnement({ searchParams }: Props) {
           <li>Les appels d&apos;offres qui vous concernent, chaque matin.</li>
           <li>Les marchés de votre secteur qui seront relancés dans 6 à 12 mois.</li>
           <li>Les fiches des acheteurs et de vos concurrents, sans limite.</li>
+          <li>Le suivi de {MAX_CONCURRENTS} concurrents : une alerte dès qu&apos;ils gagnent un marché.</li>
           <li>Sans engagement : vous arrêtez quand vous voulez.</li>
         </ul>
         {paiementConfigure() ? (
