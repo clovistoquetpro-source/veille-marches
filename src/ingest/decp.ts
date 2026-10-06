@@ -92,7 +92,8 @@ export async function normaliser(
       trim(id::varchar) as id_marche,
       regexp_replace(acheteur_id::varchar, '\\D', '', 'g') as acheteur_siret,
       ${format === "2019" ? "nullif(trim(acheteur_nom), '')" : "null::varchar"} as acheteur_nom,
-      nullif(trim(objet), '') as objet,
+      -- certains objets portent des « \\n » littéraux et des espaces en série
+      nullif(trim(regexp_replace(replace(objet, '\\n', ' '), '\\s+', ' ', 'g')), '') as objet,
       nullif(trim(codecpv), '') as cpv,
       nature, procedure,
       try_cast(montant as double) as montant,
@@ -137,12 +138,34 @@ export async function normaliser(
       from par_identifiant
       where rang = 1
     ),
+    -- Un identifiant allongé de zéros (« 2026f57m401 » et « 2026f57m40100000 ») désigne le même
+    -- marché, même quand l'objet a été retouché d'un envoi à l'autre.
+    par_identifiant_proche as (
+      select * exclude (rang), row_number() over (
+        partition by acheteur_siret, date_notification, montant, titulaire_cle, rtrim(id_marche, '0')
+        order by format desc, id_marche
+      ) as rang
+      from par_contenu
+      where rang = 1 or montant is null or titulaire_cle is null
+    ),
+    -- Le même marché transmis par deux sources (la DGFIP et la plateforme de l'acheteur) a deux
+    -- identifiants, deux objets rédigés différemment et parfois deux codes CPV, mais le même acheteur,
+    -- la même date, le même montant et les mêmes titulaires. On garde une seule source, de préférence
+    -- la plateforme, dont l'objet est plus lisible ; les lots d'une même source restent distincts.
+    par_source as (
+      select *, first_value(source) over (
+        partition by acheteur_siret, date_notification, montant, titulaire_cle
+        order by coalesce(source, '') like 'DGFIP%', source
+      ) as source_retenue
+      from par_identifiant_proche
+      where rang = 1 or montant is null or titulaire_cle is null
+    ),
     classe as (
       select *,
         left(cpv, 2) as division,
         case when duree_mois between 1 and 120 then duree_mois end as duree_valide
-      from par_contenu
-      where rang = 1 or montant is null or titulaire_cle is null
+      from par_source
+      where source is not distinct from source_retenue or montant is null or titulaire_cle is null
     )
     select
       acheteur_siret || '-' || id_marche as uid,

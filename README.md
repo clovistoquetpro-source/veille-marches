@@ -90,6 +90,7 @@ et les conditions affichent sinon un avertissement) et faire relire les conditio
 - **BOAMP** : avis nationaux (MAPA, procédures formalisées) par l'API Opendatasoft de la DILA, chaque matin. Les avis européens repris par le BOAMP (famille « JOUE ») sont tous sur TED : on les prend là-bas.
 - **TED** : avis européens des acheteurs français par l'API de recherche v3, chaque matin. Les avis de modification sont classés en rectificatifs.
 - **Sirene** : fichier mensuel des unités légales (parquet sur data.gouv.fr), limité aux SIREN présents en base. Le nom des entrepreneurs individuels qui refusent la diffusion n'est pas repris.
+- Un même marché transmis par deux sources (la DGFIP et la plateforme de l'acheteur) n'est gardé qu'une fois : même acheteur, même date, même montant et mêmes titulaires, sous deux identifiants et deux objets différents. On garde la plateforme, dont l'objet est plus lisible. Cela écarte 20 139 doublons sur 1,15 million de marchés (mesure du 6 octobre 2026).
 - Date de fin estimée = date de notification + durée publiée (reconductions comprises).
 - Les travaux (CPV 45) et la maîtrise d'œuvre (CPV 71) ne sont pas proposés comme renouvellements : leur fin ne prédit pas de relance (mesure du 5 octobre 2026).
 - Les montants de remplissage (9 999 999 €, 99 999 999 €…) sont ignorés ; les totaux des fiches excluent les montants supérieurs à un milliard d'euros.
