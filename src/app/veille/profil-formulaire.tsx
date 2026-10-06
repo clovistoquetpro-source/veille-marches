@@ -57,6 +57,14 @@ export function PanneauProfil({ profil, ouvert }: { profil: Profil; ouvert: bool
           <input name="departements" defaultValue={profil.departements.join(", ")} className="mt-1 w-full rounded border px-3 py-2" />
           <span className="text-xs text-gray-500">Vide = toute la France.</span>
         </label>
+        <label className="block">
+          <span className="font-medium">Alertes par courriel</span>
+          <select name="frequence" defaultValue={profil.frequence ?? "quotidienne"} className="mt-1 block rounded border px-3 py-2">
+            <option value="quotidienne">Chaque matin</option>
+            <option value="hebdomadaire">Une fois par semaine, le lundi</option>
+            <option value="aucune">Aucune alerte</option>
+          </select>
+        </label>
         {etat.erreur && <p className="rounded border border-red-300 bg-red-50 p-2 text-red-800">{etat.erreur}</p>}
         {etat.message && <p className="rounded border border-green-300 bg-green-50 p-2 text-green-800">{etat.message}</p>}
         <button disabled={enCours} className="rounded bg-gray-900 px-3 py-1.5 text-white disabled:opacity-50">

@@ -9,6 +9,8 @@ export type Profil = {
   departements: string[];
   /** Marchés déjà gagnés, déduction par l'IA, ou saisie à la main. */
   origine: "historique" | "ia" | "manuel";
+  /** Rythme des alertes par courriel. */
+  frequence?: "quotidienne" | "hebdomadaire" | "aucune";
 };
 
 /** Ce que la base sait d'une entreprise avant de lui proposer un profil. */
@@ -108,7 +110,7 @@ export function nettoyerProfil(profil: Partial<Profil>): Omit<Profil, "origine">
 export async function profilDuCompte(sql: postgres.Sql, compteId: string): Promise<Profil | null> {
   const [ligne] = await sql<Profil[]>`
     select array_to_json(cpv) as cpv, array_to_json(mots_cles) as mots_cles,
-      array_to_json(departements) as departements, origine
+      array_to_json(departements) as departements, origine, frequence
     from profils where compte_id = ${compteId}`;
   return ligne ?? null;
 }
@@ -117,10 +119,10 @@ export async function profilDuCompte(sql: postgres.Sql, compteId: string): Promi
 export async function enregistrerProfil(sql: postgres.Sql, compteId: string, profil: Profil): Promise<void> {
   const { cpv, mots_cles, departements } = nettoyerProfil(profil);
   await sql`
-    insert into profils (compte_id, cpv, mots_cles, departements, origine)
+    insert into profils (compte_id, cpv, mots_cles, departements, origine, frequence)
     values (${compteId}, ${tableauPg(cpv)}, ${tableauPg(mots_cles)}, ${tableauPg(departements)},
-      ${profil.origine})
+      ${profil.origine}, ${profil.frequence ?? "quotidienne"})
     on conflict (compte_id) do update set
       cpv = excluded.cpv, mots_cles = excluded.mots_cles, departements = excluded.departements,
-      origine = excluded.origine, maj_le = now()`;
+      origine = excluded.origine, frequence = excluded.frequence, maj_le = now()`;
 }

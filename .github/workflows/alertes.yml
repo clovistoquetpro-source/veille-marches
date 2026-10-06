@@ -1,0 +1,55 @@
+name: Alertes par courriel
+
+on:
+  schedule:
+    # Chaque matin à 6 h 30 UTC, une heure après l'import des avis.
+    - cron: "30 6 * * *"
+    # Le lundi à 7 h UTC pour ceux qui ont choisi une alerte hebdomadaire.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      frequence:
+        description: "quotidienne (défaut) ou hebdomadaire"
+        required: false
+
+concurrency:
+  group: alertes
+  cancel-in-progress: false
+
+jobs:
+  envoyer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      COURRIEL_ADRESSE: ${{ vars.COURRIEL_ADRESSE }}
+    steps:
+      - name: Vérifier que la base et l'envoi de courriels sont configurés
+        id: config
+        run: |
+          if [ -z "$DATABASE_URL" ] || [ -z "$BREVO_API_KEY" ]; then
+            echo "Secrets DATABASE_URL ou BREVO_API_KEY absents : alertes ignorées."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pret == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.config.outputs.pret == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.config.outputs.pret == 'true'
+      - name: Envoyer les alertes
+        if: steps.config.outputs.pret == 'true'
+        # le déclenchement du lundi 7 h est l'envoi hebdomadaire, les autres sont quotidiens
+        run: |
+          FREQUENCE="${{ inputs.frequence }}"
+          if [ -z "$FREQUENCE" ] && [ "${{ github.event.schedule }}" = "0 7 * * 1" ]; then
+            FREQUENCE=hebdomadaire
+          fi
+          npm run alertes -- --frequence "${FREQUENCE:-quotidienne}"

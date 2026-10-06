@@ -26,6 +26,7 @@ npm run db:migrer      # applique les migrations sur DATABASE_URL
 npm run import:decp    # télécharge les DECP et remplace les marchés en base (5 à 10 minutes)
 npm run import:sirene  # noms et activités des entreprises et acheteurs (fichier Sirene, 1 à 2 minutes)
 npm run import:avis    # avis BOAMP et TED depuis le dernier import (ou -- --depuis AAAA-MM-JJ)
+npm run alertes        # alertes par courriel (-- --essai pour les afficher sans les envoyer)
 npm run preview        # site tel qu'il tournera sur Cloudflare
 npm run deploy         # mise en ligne sur Cloudflare
 ```
@@ -48,6 +49,17 @@ préfixes **ou** que son objet contient l'un des mots-clés, et qu'il s'exécute
 départements suivis. Les mêmes règles serviront aux alertes par courriel.
 
 La session est un identifiant tiré au sort, déposé dans un cookie et conservé un mois en base.
+
+## Alertes
+
+Chaque matin (ou le lundi, au choix du client), un courriel reprend les appels d'offres parus depuis
+la dernière alerte et les marchés qui entrent dans la fenêtre de relance, 6 à 12 mois avant leur fin.
+Rien n'est annoncé deux fois : les avis et les marchés envoyés sont retenus par compte. Les lots d'un
+même marché sont regroupés en une ligne, et un acheteur ne prend jamais plus de trois lignes.
+
+L'envoi passe par [Brevo](https://brevo.com) (secret `BREVO_API_KEY`) ; sans clé, les courriels sont
+affichés dans la console. Chaque courriel porte un lien de désinscription qui coupe les alertes sans
+supprimer le compte.
 
 ## Données
 

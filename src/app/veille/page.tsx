@@ -23,7 +23,7 @@ export default async function PageVeille() {
     const compte = await compteDeLaSession(sql, session);
     if (!compte) return null;
     const profil = (await profilDuCompte(sql, compte.id))
-      ?? { cpv: [], mots_cles: [], departements: [], origine: "manuel" as const };
+      ?? { cpv: [], mots_cles: [], departements: [], origine: "manuel" as const, frequence: "quotidienne" as const };
     const [avis, renouvellements] = await Promise.all([
       avisDuProfil(sql, profil, 30),
       renouvellementsDuProfil(sql, profil, 30),
