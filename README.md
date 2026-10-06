@@ -23,7 +23,7 @@ npm run dev            # site en local sur http://localhost:3000
 npm test               # tests (ajouter DATABASE_URL_TEST pour les tests sur une vraie base locale)
 npm run lint && npm run typecheck
 npm run db:migrer      # applique les migrations sur DATABASE_URL
-npm run import:decp    # télécharge les DECP et remplace les marchés en base (5 à 10 minutes)
+npm run import:decp    # télécharge les DECP et met à jour les marchés qui ont changé (5 à 10 minutes)
 npm run import:sirene  # noms et activités des entreprises et acheteurs (fichier Sirene, 1 à 2 minutes)
 npm run import:avis    # avis BOAMP et TED depuis le dernier import (ou -- --depuis AAAA-MM-JJ)
 npm run alertes        # alertes par courriel (-- --essai pour les afficher sans les envoyer)
@@ -89,7 +89,7 @@ passe est déployée par le workflow `deploiement.yml` : il met la base à jour 
 `npm run deploy`. Il est sauté tant que les secrets Cloudflare manquent, et se relance à la main depuis
 l'onglet *Actions*.
 
-1. Créer le projet Supabase (région UE), récupérer la chaîne de connexion en mode *Transaction*.
+1. Créer le projet Supabase (région UE, offre gratuite), récupérer la chaîne de connexion en mode *Transaction*.
 2. `DATABASE_URL=… npm run db:migrer`, puis les imports (`import:decp`, `import:sirene`, `import:avis`).
 3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY`,
    `CLOUDFLARE_API_TOKEN` (jeton créé avec le modèle *Edit Cloudflare Workers*) et `CLOUDFLARE_ACCOUNT_ID` ;
@@ -106,7 +106,7 @@ et les conditions affichent sinon un avertissement) et faire relire les conditio
 
 ## Données
 
-- **DECP** : exports parquet de [data.economie.gouv.fr](https://data.economie.gouv.fr), jeux `decp-v3-marches-valides` (2018-2023) et `decp-2022-marches-valides` (2023 à aujourd'hui). Import complet chaque lundi, suivi de Sirene.
+- **DECP** : exports parquet de [data.economie.gouv.fr](https://data.economie.gouv.fr), jeux `decp-v3-marches-valides` (2018-2023) et `decp-2022-marches-valides` (2023 à aujourd'hui). Import chaque lundi, suivi de Sirene : tout est nettoyé dans DuckDB, puis seuls les marchés nouveaux, modifiés ou disparus sont écrits en base (une empreinte du contenu sert à comparer).
 - **BOAMP** : avis nationaux (MAPA, procédures formalisées) par l'API Opendatasoft de la DILA, chaque matin. Les avis européens repris par le BOAMP (famille « JOUE ») sont tous sur TED : on les prend là-bas.
 - **TED** : avis européens des acheteurs français par l'API de recherche v3, chaque matin. Les avis de modification sont classés en rectificatifs.
 - **Sirene** : fichier mensuel des unités légales (parquet sur data.gouv.fr), limité aux SIREN présents en base. Le nom des entrepreneurs individuels qui refusent la diffusion n'est pas repris.
@@ -115,5 +115,18 @@ et les conditions affichent sinon un avertissement) et faire relire les conditio
 - Les travaux (CPV 45) et la maîtrise d'œuvre (CPV 71) ne sont pas proposés comme renouvellements : leur fin ne prédit pas de relance (mesure du 5 octobre 2026).
 - Les montants de remplissage (9 999 999 €, 99 999 999 €…) sont ignorés ; les totaux des fiches excluent les montants supérieurs à un milliard d'euros.
 - Les titulaires des avis BOAMP nationaux sont lus dans un texte libre : le nom est retrouvé dans environ 85 % des attributions, le SIRET rarement (mesure sur une semaine d'octobre 2026). TED donne le SIREN ou le SIRET dans environ 4 attributions sur 10.
+
+### Taille de la base
+
+La base doit tenir dans les 500 Mo de l'offre gratuite de Supabase, qui passe en lecture seule au-delà.
+On garde donc les marchés notifiés depuis trois ans et ceux encore en cours (`ANNEES_HISTORIQUE`), et
+les avis des six derniers mois ou dont la date limite n'est pas passée (`MOIS_AVIS`). Les colonnes que
+le site n'affiche pas (identifiant, nature, procédure, source) restent dans le nettoyage DuckDB. Mesure
+du 6 octobre 2026 en local : 577 000 marchés, 316 Mo en tout (773 Mo avec tout l'historique depuis 2018).
+
+L'import n'écrit que ce qui change, pour ne jamais doubler la taille de la base pendant le chargement.
+Si plus d'un marché sur cinq change (nouvelle règle de nettoyage), il supprime d'abord, fait le ménage
+(`vacuum`), puis ajoute. Un projet gratuit est mis en pause après une semaine sans activité : les imports
+quotidiens des avis suffisent à l'éviter.
 
 Sources sous Licence Ouverte : DECP (ministère de l'Économie), BOAMP (DILA), TED (Office des publications de l'UE).

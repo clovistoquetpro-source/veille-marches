@@ -38,8 +38,8 @@ export async function ficheEntreprise(sql: postgres.Sql, siren: string): Promise
   const [fiche] = await sql<FicheEntreprise[]>`
     with b as (select ${siren}::text as siren),
     gagnes as (
-      select distinct m.uid, m.acheteur_siret, m.cpv, m.montant, m.date_notification
-      from marches_titulaires t join marches m on m.uid = t.marche_uid
+      select distinct m.id, m.acheteur_siret, m.cpv, m.montant, m.date_notification
+      from marches_titulaires t join marches m on m.id = t.marche_id
       where t.siren = ${siren}
     )
     select
@@ -73,7 +73,7 @@ export async function ficheEntreprise(sql: postgres.Sql, siren: string): Promise
         from renouvellements r
         left join acheteurs a on a.siret = r.acheteur_siret
         left join entreprises ea on ea.siren = left(r.acheteur_siret, 9)
-        where r.uid in (select uid from gagnes)
+        where r.id in (select id from gagnes)
         order by r.date_fin_estimee, r.montant desc nulls last limit 30
       ) x), '[]') as echeances,
       coalesce((select json_agg(x) from (

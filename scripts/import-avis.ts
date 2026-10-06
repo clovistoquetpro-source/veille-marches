@@ -1,12 +1,12 @@
 /**
  * Importe les avis publiés depuis le dernier import (ou depuis la date donnée) : avis nationaux du
- * BOAMP et avis européens de TED.
+ * BOAMP et avis européens de TED. Supprime ensuite les avis de plus de six mois dont la date limite est passée.
  * Usage : DATABASE_URL=… npm run import:avis [-- --depuis 2026-09-01] [-- --jusqua 2026-09-30]
  */
 import path from "node:path";
 import { parseArgs } from "node:util";
 import postgres from "postgres";
-import { enregistrerAvis } from "../src/ingest/avis";
+import { enregistrerAvis, MOIS_AVIS, purgerAvis } from "../src/ingest/avis";
 import { lireAvisBoamp, telechargerBoamp } from "../src/ingest/boamp";
 import { journaliser, migrer } from "../src/ingest/charger";
 import { lireAvisTed, telechargerTed } from "../src/ingest/ted";
@@ -42,6 +42,9 @@ async function main() {
       });
       console.log(`${lignes} avis ${source.toUpperCase()} enregistrés.`);
     }
+    const purges = await purgerAvis(sql);
+    await sql`vacuum analyze avis, avis_titulaires`;
+    console.log(`${purges} avis de plus de ${MOIS_AVIS} mois supprimés.`);
   } finally {
     await sql.end();
   }

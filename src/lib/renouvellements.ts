@@ -27,13 +27,13 @@ export type FiltresRenouvellements = {
   limite?: number;
 };
 
-/** Titulaires d'un marché en JSON, à utiliser dans une sous-requête (`marche_uid` = colonne uid). */
-export function titulairesJson(sql: postgres.Sql, uid: postgres.Fragment) {
+/** Titulaires d'un marché en JSON, à utiliser dans une sous-requête (`id` = colonne id du marché). */
+export function titulairesJson(sql: postgres.Sql, id: postgres.Fragment) {
   return sql`coalesce((
     select json_agg(json_build_object('id', t.titulaire_id, 'siren', t.siren, 'nom', te.nom) order by t.titulaire_id)
     from marches_titulaires t
     left join entreprises te on te.siren = t.siren
-    where t.marche_uid = ${uid}
+    where t.marche_id = ${id}
   ), '[]')`;
 }
 
@@ -46,7 +46,7 @@ export async function listerRenouvellements(
     select r.uid, r.objet, r.acheteur_siret as acheteur, coalesce(e.nom, a.nom) as acheteur_nom, r.famille,
       r.cpv, r.montant::float as montant, r.date_fin_estimee::text as date_fin_estimee, r.duree_mois,
       r.offres_recues, r.deja_relance_le::text as deja_relance_le,
-      ${titulairesJson(sql, sql`r.uid`)} as titulaires
+      ${titulairesJson(sql, sql`r.id`)} as titulaires
     from renouvellements r
     left join acheteurs a on a.siret = r.acheteur_siret
     left join entreprises e on e.siren = left(r.acheteur_siret, 9)

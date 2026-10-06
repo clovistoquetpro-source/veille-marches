@@ -106,7 +106,7 @@ export async function marchesAAnnoncer(
   if (profilVide(profil)) return [];
   return sql<MarcheAlerte[]>`
     with eligibles as (
-      select r.uid, r.objet, r.acheteur_siret, r.montant, r.date_fin_estimee
+      select r.id, r.uid, r.objet, r.acheteur_siret, r.montant, r.date_fin_estimee
       from renouvellements r
       where r.date_fin_estimee between current_date + interval '6 months' and current_date + interval '12 months'
         and (${criteresProfil(sql, profil, sql`r.cpv`, sql`r.objet`)})
@@ -116,7 +116,8 @@ export async function marchesAAnnoncer(
     -- un marché alloti paraît une fois par lot : on regroupe les lots d'un même objet chez un même acheteur
     groupes as (
       select acheteur_siret,
-        (array_agg(uid order by montant desc nulls last))[1] as uid,
+        (array_agg(id order by montant desc nulls last, uid))[1] as id,
+        (array_agg(uid order by montant desc nulls last, uid))[1] as uid,
         array_to_json(array_agg(uid)) as uids,
         count(*)::int as nb_lots,
         min(objet) as objet,
@@ -135,7 +136,7 @@ export async function marchesAAnnoncer(
       coalesce(e.nom, ach.nom) as acheteur_nom, c.montant, c.date_fin_estimee::text as date_fin_estimee,
       (select coalesce(te.nom, t.titulaire_id) from marches_titulaires t
          left join entreprises te on te.siren = t.siren
-         where t.marche_uid = c.uid order by t.titulaire_id limit 1) as titulaire
+         where t.marche_id = c.id order by t.titulaire_id limit 1) as titulaire
     from classes c
     left join acheteurs ach on ach.siret = c.acheteur_siret
     left join entreprises e on e.siren = left(c.acheteur_siret, 9)

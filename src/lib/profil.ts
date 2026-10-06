@@ -41,7 +41,7 @@ export async function historiqueEntreprise(sql: postgres.Sql, siren: string): Pr
   const [ligne] = await sql<HistoriqueEntreprise[]>`
     with gagnes as (
       select m.* from marches m
-      join marches_titulaires t on t.marche_uid = m.uid and t.siren = ${siren}
+      join marches_titulaires t on t.marche_id = m.id and t.siren = ${siren}
     )
     select
       ${siren}::text as siren,

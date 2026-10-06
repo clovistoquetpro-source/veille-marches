@@ -62,7 +62,7 @@ export async function concurrentsDuCompte(sql: postgres.Sql, compteId: string): 
         count(*) filter (
           where m.renouvelable and m.date_fin_estimee between current_date and current_date + interval '12 months'
         )::int as echeances
-      from marches_titulaires t join marches m on m.uid = t.marche_uid
+      from marches_titulaires t join marches m on m.id = t.marche_id
       where t.siren = c.siren
     ) s
     where c.compte_id = ${compteId}
@@ -145,7 +145,7 @@ export async function chercherConcurrents(sql: postgres.Sql, texte: string, limi
       select * from candidats where marches > 0 order by marches desc, nom limit ${limite}
     )
     select m.siren, m.nom,
-      (select count(distinct ma.acheteur_siret)::int from marches_titulaires t join marches ma on ma.uid = t.marche_uid
+      (select count(distinct ma.acheteur_siret)::int from marches_titulaires t join marches ma on ma.id = t.marche_id
         where t.siren = m.siren) as acheteurs,
       m.marches
     from meilleurs m
@@ -186,7 +186,7 @@ async function suggestionsDuProfil(
   return sql<Suggestion[]>`
     select t.siren, max(e.nom) as nom, count(distinct m.acheteur_siret)::int as acheteurs, count(*)::int as marches
     from marches m
-    join marches_titulaires t on t.marche_uid = m.uid
+    join marches_titulaires t on t.marche_id = m.id
     join entreprises e on e.siren = t.siren
     where m.date_notification >= current_date - interval '2 years'
       and (${criteresProfil(sql, profil, sql`m.cpv`, sql`m.objet`)})
@@ -240,7 +240,7 @@ export async function gainsDesConcurrents(
       select m.uid, s.siren, s.nom, m.objet, m.acheteur_siret, m.montant, m.date_notification
       from suivis s
       join marches_titulaires t on t.siren = s.siren
-      join marches m on m.uid = t.marche_uid
+      join marches m on m.id = t.marche_id
       where m.date_notification >= current_date - ${JOURS_MARCHES}::integer
         ${dejaAnnonce("marche", sql`m.uid`)}
         and not exists (

@@ -101,3 +101,18 @@ export async function enregistrerAvis(sql: postgres.Sql, avis: Avis[]): Promise<
   });
   return avis.length;
 }
+
+/**
+ * Mois d'avis gardés en base, en plus de ceux dont la date limite n'est pas passée : assez pour les
+ * fiches et la veille des concurrents, et la base tient dans les 500 Mo de l'offre gratuite de Supabase.
+ */
+export const MOIS_AVIS = 6;
+
+/** Supprime les avis plus anciens que `mois` dont la date limite est passée. Renvoie leur nombre. */
+export async function purgerAvis(sql: postgres.Sql, mois = MOIS_AVIS): Promise<number> {
+  const resultat = await sql`
+    delete from avis
+    where date_publication < current_date - make_interval(months => ${mois}::int)
+      and (date_limite is null or date_limite < current_date)`;
+  return resultat.count;
+}
