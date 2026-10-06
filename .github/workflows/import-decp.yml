@@ -1,0 +1,39 @@
+name: Import des DECP
+
+on:
+  schedule:
+    # Chaque lundi à 3 h (heure de Paris en hiver) : les DECP sont mises à jour environ une fois par semaine.
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: import-decp
+  cancel-in-progress: false
+
+jobs:
+  importer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Vérifier que la base est configurée
+        id: config
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "Secret DATABASE_URL absent : import ignoré. Ajoutez-le dans Settings > Secrets and variables > Actions."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "pret=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.config.outputs.pret == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.config.outputs.pret == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        if: steps.config.outputs.pret == 'true'
+      - run: npm run import:decp
+        if: steps.config.outputs.pret == 'true'
