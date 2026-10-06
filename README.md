@@ -53,13 +53,27 @@ La session est un identifiant tiré au sort, déposé dans un cookie et conserv�
 ## Alertes
 
 Chaque matin (ou le lundi, au choix du client), un courriel reprend les appels d'offres parus depuis
-la dernière alerte et les marchés qui entrent dans la fenêtre de relance, 6 à 12 mois avant leur fin.
+la dernière alerte, les marchés qui entrent dans la fenêtre de relance, 6 à 12 mois avant leur fin, et
+les marchés que ses concurrents suivis viennent de gagner.
 Rien n'est annoncé deux fois : les avis et les marchés envoyés sont retenus par compte. Les lots d'un
 même marché sont regroupés en une ligne, et un acheteur ne prend jamais plus de trois lignes.
 
 L'envoi passe par [Brevo](https://brevo.com) (secret `BREVO_API_KEY`) ; sans clé, les courriels sont
 affichés dans la console. Chaque courriel porte un lien de désinscription qui coupe les alertes sans
 supprimer le compte.
+
+## Veille des concurrents
+
+Le client suit jusqu'à 20 entreprises, depuis leur fiche, depuis `/veille` (par leur nom, leur SIREN ou
+leur SIRET), ou parmi les concurrents qu'on lui propose : celles qui gagnent le plus souvent les marchés
+de son profil depuis deux ans. Pour chacune, `/veille` montre ses marchés gagnés dans l'année, ceux qui
+arrivent à échéance (qu'on peut lui reprendre) et ses derniers gains.
+
+Un gain vient d'un avis d'attribution (BOAMP, TED) des 30 derniers jours, ou des DECP des 90 derniers
+jours (elles paraissent avec retard). Les avis du BOAMP donnent rarement le SIRET du titulaire : on
+les rapproche alors par le nom, débarrassé de sa forme juridique et de ses accents
+(`nom_simplifie`, 64 % des titulaires sans SIRET retrouvés). Un marché déjà connu par son avis
+d'attribution n'est pas annoncé une seconde fois quand il arrive dans les DECP.
 
 ## Abonnement
 
@@ -70,14 +84,20 @@ Les alertes ne partent qu'aux comptes dont l'accès est ouvert (abonnement en co
 
 ## Mise en ligne
 
-Le site tourne sur Cloudflare Workers (`npm run deploy`) et la base sur Supabase.
+Le site tourne sur Cloudflare Workers et la base sur Supabase. Chaque fusion dans `main` dont la CI
+passe est déployée par le workflow `deploiement.yml` : il met la base à jour (`db:migrer`) puis lance
+`npm run deploy`. Il est sauté tant que les secrets Cloudflare manquent, et se relance à la main depuis
+l'onglet *Actions*.
 
 1. Créer le projet Supabase (région UE), récupérer la chaîne de connexion en mode *Transaction*.
 2. `DATABASE_URL=… npm run db:migrer`, puis les imports (`import:decp`, `import:sirene`, `import:avis`).
-3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY` ;
-   variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports et les alertes sont sautés.
+3. Dans GitHub, *Settings > Secrets and variables > Actions* : secrets `DATABASE_URL`, `BREVO_API_KEY`,
+   `CLOUDFLARE_API_TOKEN` (jeton créé avec le modèle *Edit Cloudflare Workers*) et `CLOUDFLARE_ACCOUNT_ID` ;
+   variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports, les alertes et le déploiement sont sautés.
 4. Dans Cloudflare, `npx wrangler secret put` pour `DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`,
-   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET`, et les variables `SITE_URL` et `EDITEUR_*`.
+   `STRIPE_SECRET_KEY`, `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET` ; les variables `SITE_URL` et `EDITEUR_*` se
+   saisissent dans le tableau de bord du Worker (*Settings > Variables*) et sont conservées à chaque
+   déploiement (`keep_vars`).
 5. Dans Stripe, déclarer le point d'entrée `https://…/api/stripe` pour les événements
    `checkout.session.completed`, `customer.subscription.*` et `invoice.payment_failed`.
 
@@ -90,6 +110,7 @@ et les conditions affichent sinon un avertissement) et faire relire les conditio
 - **BOAMP** : avis nationaux (MAPA, procédures formalisées) par l'API Opendatasoft de la DILA, chaque matin. Les avis européens repris par le BOAMP (famille « JOUE ») sont tous sur TED : on les prend là-bas.
 - **TED** : avis européens des acheteurs français par l'API de recherche v3, chaque matin. Les avis de modification sont classés en rectificatifs.
 - **Sirene** : fichier mensuel des unités légales (parquet sur data.gouv.fr), limité aux SIREN présents en base. Le nom des entrepreneurs individuels qui refusent la diffusion n'est pas repris.
+- Un même marché transmis par deux sources (la DGFIP et la plateforme de l'acheteur) n'est gardé qu'une fois : même acheteur, même date, même montant et mêmes titulaires, sous deux identifiants et deux objets différents. On garde la plateforme, dont l'objet est plus lisible. Cela écarte 20 139 doublons sur 1,15 million de marchés (mesure du 6 octobre 2026).
 - Date de fin estimée = date de notification + durée publiée (reconductions comprises).
 - Les travaux (CPV 45) et la maîtrise d'œuvre (CPV 71) ne sont pas proposés comme renouvellements : leur fin ne prédit pas de relance (mesure du 5 octobre 2026).
 - Les montants de remplissage (9 999 999 €, 99 999 999 €…) sont ignorés ; les totaux des fiches excluent les montants supérieurs à un milliard d'euros.

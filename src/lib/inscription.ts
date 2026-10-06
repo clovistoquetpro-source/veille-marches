@@ -4,7 +4,7 @@
  * de veille qu'il n'a plus qu'à corriger.
  */
 import type postgres from "postgres";
-import { chercherEntreprise, type FicheAnnuaire } from "./annuaire";
+import { chercherEntreprise, type FicheAnnuaire, INDISPONIBLE } from "./annuaire";
 import { ouvrirEssai } from "./abonnements";
 import { type Compte, creerCompte, normaliserEmail } from "./comptes";
 import { profilParIa } from "./ia";
@@ -54,6 +54,9 @@ export async function inscrire(
     return { ok: false, erreur: "Un SIRET fait 14 chiffres (un SIREN, 9). Il figure sur vos factures." };
   }
   const entreprise = await chercherEntreprise(numero);
+  if (entreprise === INDISPONIBLE) {
+    return { ok: false, erreur: "L'annuaire des entreprises ne répond pas pour l'instant. Réessayez dans une minute." };
+  }
   if (!entreprise) {
     return { ok: false, erreur: "Aucune entreprise ne porte ce numéro dans l'annuaire des entreprises." };
   }

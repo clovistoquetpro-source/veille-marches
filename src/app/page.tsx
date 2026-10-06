@@ -25,7 +25,8 @@ const ATOUTS = [
   },
   {
     titre: "Vos concurrents à la loupe",
-    texte: "Qui gagne quoi, pour quel montant, et quand ce marché reviendra en jeu.",
+    texte: "Qui gagne quoi, pour quel montant, et quand ce marché reviendra en jeu. Suivez vos concurrents : " +
+      "vous êtes prévenu dès qu'ils remportent un marché.",
   },
 ];
 

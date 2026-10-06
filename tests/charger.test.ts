@@ -15,6 +15,10 @@ import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
 import { abonnementDuCompte, majAbonnement, ouvrirEssai } from "../src/lib/abonnements";
 import { destinataires, envoyerAlertes } from "../src/lib/alertes";
+import {
+  chercherConcurrents, concurrentsDuCompte, concurrentsProbables, estSuivie, gainsDesConcurrents, nePlusSuivre,
+  suivreEntreprise,
+} from "../src/lib/concurrents";
 import { compteDeLaSession, creerCompte, desinscrire, fermerSession, ouvrirSession } from "../src/lib/comptes";
 import type { Courriel } from "../src/lib/courriel";
 import { avisDuProfil, renouvellementsDuProfil } from "../src/lib/correspondance";
@@ -117,18 +121,26 @@ describe.skipIf(!locale)("charger les DECP dans PostgreSQL", () => {
 });
 
 /** Suite de la précédente : avis, entreprises et fiches, sur les marchés déjà chargés. */
+const ACHETEUR = "21690123100011";
+
+/** Date à n jours d'aujourd'hui (négatif : dans le passé), pour que les avis restent « en cours ». */
+function dansJours(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+const avis = (champs: Partial<Avis>): Avis => ({
+  uid: "boamp-26-1", source: "boamp", numero: "26-1", type: "marche", objet: "Nettoyage des écoles",
+  acheteur_nom: "Ville de Test", acheteur_siret: ACHETEUR, cpv: "90910000", famille: "services",
+  descripteurs: ["Nettoyage", "Propreté \"urbaine\""], departements: ["69"], date_publication: dansJours(-5),
+  date_limite: dansJours(27), montant: null, offres_recues: null, url: "https://www.boamp.fr/pages/avis/?q=idweb:26-1",
+  avis_initial: null, titulaires: [],
+  ...champs,
+});
+
 describe.skipIf(!locale)("avis, entreprises et fiches", () => {
   let sql: postgres.Sql;
-  const ACHETEUR = "21690123100011";
-
-  const avis = (champs: Partial<Avis>): Avis => ({
-    uid: "boamp-26-1", source: "boamp", numero: "26-1", type: "marche", objet: "Nettoyage des écoles",
-    acheteur_nom: "Ville de Test", acheteur_siret: ACHETEUR, cpv: "90910000", famille: "services",
-    descripteurs: ["Nettoyage", "Propreté \"urbaine\""], departements: ["69"], date_publication: "2026-10-01",
-    date_limite: "2026-11-02", montant: null, offres_recues: null, url: "https://www.boamp.fr/pages/avis/?q=idweb:26-1",
-    avis_initial: null, titulaires: [],
-    ...champs,
-  });
 
   beforeAll(async () => {
     sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
@@ -145,7 +157,7 @@ describe.skipIf(!locale)("avis, entreprises et fiches", () => {
       avis({}),
       avis({
         uid: "ted-1-2026", source: "ted", numero: "1-2026", type: "attribution", objet: "Nettoyage des gymnases",
-        descripteurs: null, date_publication: "2026-09-30", date_limite: null, montant: 45000,
+        descripteurs: null, date_publication: dansJours(-6), date_limite: null, montant: 45000,
         url: "https://ted.europa.eu/fr/notice/-/detail/1-2026",
         titulaires: [{ nom: "Nettoyage du Rhône", identifiant: "11111111100011" }, { nom: "Brouillon", identifiant: null }],
       }),
@@ -377,5 +389,125 @@ describe.skipIf(!locale)("alertes par courriel", () => {
     await sql`delete from alertes_avis`;
     await sql`delete from alertes_marches`;
     expect(await envoyerAlertes(sql, envoyeur, "hebdomadaire")).toEqual({ envoyees: 0, erreurs: 0, sansNouveaute: 0 });
+  });
+});
+
+/** Suite des précédentes : un client suit ses concurrents et apprend ce qu'ils gagnent. */
+describe.skipIf(!locale)("veille des concurrents", () => {
+  let sql: postgres.Sql;
+  let compteId: string;
+  const CONCURRENT = "555555555";
+  const AUTRE_ACHETEUR = "21010001200017";
+  const annuaire = async (siren: string) => siren === "666666666"
+    ? { siren, siret: null, nom: "NOUVELLE ENTREPRISE", naf: null, departement: null, commune: null, active: true }
+    : null;
+
+  beforeAll(async () => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+    await sql`insert into entreprises (siren, nom, active, diffusible) values (${CONCURRENT}, 'PROPRETE DU LYONNAIS', true, true)`;
+    // deux lots du même marché notifiés il y a vingt jours, et un marché trop ancien pour être annoncé
+    const marche = (uid: string, objet: string, montant: number, notification: number) => ({
+      uid, id_marche: uid, acheteur_siret: ACHETEUR, objet, cpv: "90910000", famille: "services", renouvelable: true,
+      montant, date_notification: dansJours(notification), duree_mois: 12, date_fin_estimee: dansJours(notification + 365),
+      departement: "69", format: "2022",
+    });
+    await sql`insert into marches ${sql([
+      marche("G1", "Nettoyage des crèches", 10000, -20),
+      marche("G2", "Nettoyage des crèches", 20000, -20),
+      marche("G3", "Vitrerie", 5000, -800),
+    ])}`;
+    await sql`insert into marches_titulaires ${sql(["G1", "G2", "G3"].map((uid) => ({
+      marche_uid: uid, titulaire_id: `${CONCURRENT}00055`, type_identifiant: "SIRET",
+    })))}`;
+    // le BOAMP ne donne que le nom du titulaire, écrit autrement que dans la base Sirene
+    await enregistrerAvis(sql, [avis({
+      uid: "boamp-26-50", numero: "26-50", type: "attribution", objet: "Nettoyage du collège",
+      acheteur_siret: AUTRE_ACHETEUR, acheteur_nom: "Département de l'Ain", date_publication: dansJours(-5),
+      date_limite: null, montant: 42000, titulaires: [{ nom: "Sas Propreté du Lyonnais", identifiant: null }],
+    })]);
+
+    const compte = await creerCompte(sql, { email: "concurrents@exemple.fr", siren: "111111111", siret: null, nom: null });
+    compteId = compte.id;
+    // aucun code CPV ni mot-clé : seuls ses concurrents lui valent des courriels
+    await enregistrerProfil(sql, compteId, {
+      cpv: [], mots_cles: [], departements: [], origine: "manuel", frequence: "hebdomadaire",
+    });
+    await ouvrirEssai(sql, compteId);
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  const profil = { cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "manuel" as const };
+
+  it("propose les entreprises qui gagnent les marchés du profil, et en retrouve par leur nom", async () => {
+    expect(await concurrentsProbables(sql, compteId, profil, "111111111")).toEqual([
+      { siren: CONCURRENT, nom: "PROPRETE DU LYONNAIS", acheteurs: 1, marches: 2 },
+    ]);
+    // personne à Paris : on élargit à toute la France ; rien du tout dans les travaux
+    expect((await concurrentsProbables(sql, compteId, { ...profil, departements: ["75"] }, null)).map((c) => c.siren))
+      .toEqual([CONCURRENT]);
+    expect(await concurrentsProbables(sql, compteId, { ...profil, cpv: ["45"] }, null)).toEqual([]);
+    expect((await chercherConcurrents(sql, "propreté lyonnais")).map((c) => c.siren)).toEqual([CONCURRENT]);
+    expect(await chercherConcurrents(sql, "inconnue")).toEqual([]);
+    expect(await chercherConcurrents(sql, " ")).toEqual([]);
+  });
+
+  it("suit une entreprise par son SIREN ou son SIRET, connue chez nous ou dans l'annuaire", async () => {
+    expect(await suivreEntreprise(sql, compteId, `${CONCURRENT}00055`, annuaire)).toEqual({ ok: true, nom: "PROPRETE DU LYONNAIS" });
+    expect(await suivreEntreprise(sql, compteId, "666 666 666", annuaire)).toEqual({ ok: true, nom: "NOUVELLE ENTREPRISE" });
+    expect(await suivreEntreprise(sql, compteId, "777777777", annuaire)).toMatchObject({ ok: false });
+    expect(await suivreEntreprise(sql, compteId, "12345", annuaire)).toMatchObject({ ok: false });
+    expect(await estSuivie(sql, compteId, CONCURRENT)).toBe(true);
+    // une entreprise suivie ne fait plus partie des suggestions
+    expect(await concurrentsProbables(sql, compteId, profil, "111111111")).toEqual([]);
+
+    expect(await concurrentsDuCompte(sql, compteId)).toEqual([
+      { siren: "666666666", nom: "NOUVELLE ENTREPRISE", marches_12_mois: 0, dernier_marche: null, echeances: 0 },
+      { siren: CONCURRENT, nom: "PROPRETE DU LYONNAIS", marches_12_mois: 2, dernier_marche: dansJours(-20), echeances: 2 },
+    ]);
+    await nePlusSuivre(sql, compteId, "666666666");
+    expect((await concurrentsDuCompte(sql, compteId)).map((c) => c.siren)).toEqual([CONCURRENT]);
+  });
+
+  it("rassemble ses gains : avis d'attribution reconnus par le nom, et lots des DECP regroupés", async () => {
+    expect(await gainsDesConcurrents(sql, compteId)).toEqual([
+      {
+        source: "avis", uid: "boamp-26-50", uids: ["boamp-26-50"], nb_lots: 1, siren: CONCURRENT,
+        entreprise: "PROPRETE DU LYONNAIS", objet: "Nettoyage du collège", acheteur_siret: AUTRE_ACHETEUR,
+        acheteur_nom: "Département de l'Ain", montant: 42000, date: dansJours(-5),
+        url: "https://www.boamp.fr/pages/avis/?q=idweb:26-1",
+      },
+      {
+        source: "marche", uid: "G2", uids: expect.arrayContaining(["G1", "G2"]), nb_lots: 2, siren: CONCURRENT,
+        entreprise: "PROPRETE DU LYONNAIS", objet: "Nettoyage des crèches", acheteur_siret: ACHETEUR,
+        acheteur_nom: "COMMUNE DE TEST", montant: 30000, date: dansJours(-20), url: null,
+      },
+    ]);
+  });
+
+  it("ne répète pas dans les DECP un marché déjà connu par son avis d'attribution", async () => {
+    await enregistrerAvis(sql, [avis({
+      uid: "boamp-26-51", numero: "26-51", type: "attribution", objet: "Nettoyage des crèches municipales",
+      date_publication: dansJours(-3), date_limite: null, titulaires: [{ nom: "PDL", identifiant: `${CONCURRENT}00055` }],
+    })]);
+    expect((await gainsDesConcurrents(sql, compteId)).map((g) => g.uid)).toEqual(["boamp-26-51", "boamp-26-50"]);
+  });
+
+  it("annonce par courriel, même sans profil de veille, ce qu'elle gagne après le début du suivi", async () => {
+    expect((await destinataires(sql, "hebdomadaire")).map((d) => d.email)).toContain("concurrents@exemple.fr");
+    const envoyes: Courriel[] = [];
+    expect(await envoyerAlertes(sql, async (c) => { envoyes.push(c); }, "hebdomadaire"))
+      .toEqual({ envoyees: 1, erreurs: 0, sansNouveaute: 0 });
+    // l'avis 26-50 et les lots G1 et G2 étaient déjà connus quand le client a commencé à la suivre
+    expect(envoyes[0].sujet).toBe("1 marché gagné par vos concurrents");
+    expect(envoyes[0].texte).toContain("PROPRETE DU LYONNAIS : Nettoyage des crèches municipales");
+    expect(envoyes[0].texte).not.toContain("Nettoyage du collège");
+    const [alerte] = await sql`select nb_gains from alertes where compte_id = ${compteId}`;
+    expect(alerte.nb_gains).toBe(1);
+    expect(await envoyerAlertes(sql, async (c) => { envoyes.push(c); }, "hebdomadaire"))
+      .toEqual({ envoyees: 0, erreurs: 0, sansNouveaute: 1 });
+    expect(await gainsDesConcurrents(sql, compteId, { nonAnnonces: true })).toEqual([]);
   });
 });

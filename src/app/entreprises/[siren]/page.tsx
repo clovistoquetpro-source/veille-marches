@@ -1,9 +1,14 @@
+import { cookies } from "next/headers";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { BoutonSuivi } from "@/app/veille/concurrents";
 import { Barres } from "@/components/barres";
 import { Chiffre, Section } from "@/components/fiche";
 import { LienAcheteur } from "@/components/liens";
 import { Sources } from "@/components/sources";
+import { compteDeLaSession, COOKIE_SESSION } from "@/lib/comptes";
+import { estSuivie } from "@/lib/concurrents";
 import { db } from "@/lib/db";
 import { ficheEntreprise } from "@/lib/entreprises";
 import { euros, jour, mois, nombre } from "@/lib/format";
@@ -23,6 +28,20 @@ const charger = cache(async (siren: string) => {
   return fiche;
 });
 
+/** Le visiteur connecté suit-il cette entreprise ? null s'il n'est pas connecté. */
+async function suiviDuVisiteur(siren: string): Promise<{ soiMeme: boolean; suivie: boolean } | null> {
+  const session = (await cookies()).get(COOKIE_SESSION)?.value;
+  const sql = session ? db() : null;
+  if (!sql) return null;
+  try {
+    const compte = await compteDeLaSession(sql, session);
+    if (!compte) return null;
+    return { soiMeme: compte.siren === siren, suivie: await estSuivie(sql, compte.id, siren) };
+  } finally {
+    await sql.end();
+  }
+}
+
 function nomAffiche(f: { nom: string | null; diffusible: boolean | null; siren: string }) {
   if (f.diffusible === false) return "Entrepreneur individuel (nom non diffusé)";
   return f.nom ?? `Entreprise ${f.siren}`;
@@ -35,7 +54,7 @@ export async function generateMetadata({ params }: Props) {
 
 export default async function PageEntreprise({ params }: Props) {
   const { siren } = await params;
-  const f = await charger(siren);
+  const [f, suivi] = await Promise.all([charger(siren), suiviDuVisiteur(siren)]);
   const annees = f.par_annee.filter((a) => a.annee >= 2018);
   const description = [
     f.categorie_juridique,
@@ -48,7 +67,14 @@ export default async function PageEntreprise({ params }: Props) {
   return (
     <main className="mx-auto max-w-5xl p-6">
       <p className="text-sm text-gray-600">Entreprise titulaire de marchés publics</p>
-      <h1 className="text-2xl font-semibold">{nomAffiche(f)}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">{nomAffiche(f)}</h1>
+        {suivi === null ? (
+          <Link href="/inscription" className="text-sm underline">Être prévenu quand elle gagne un marché</Link>
+        ) : !suivi.soiMeme && (
+          <BoutonSuivi siren={f.siren} suivie={suivi.suivie} />
+        )}
+      </div>
       <p className="mt-1 text-sm text-gray-600">{description.join(" · ")}</p>
       {f.active === false && <p className="mt-1 text-sm text-red-700">Entreprise fermée selon la base Sirene.</p>}
 

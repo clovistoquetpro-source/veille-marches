@@ -5,7 +5,7 @@ import { normaliser } from "../src/ingest/decp";
 type Ligne = Partial<{
   id: string; acheteur_id: string; acheteur_nom: string; objet: string; codecpv: string;
   montant: number; datenotification: string; dureemois: number; offresrecues: string;
-  lieu: string; typelieu: string;
+  lieu: string; typelieu: string; source: string;
   titulaire_id_1: string; titulaire_typeidentifiant_1: string;
   titulaire_id_2: string; titulaire_typeidentifiant_2: string;
 }>;
@@ -18,7 +18,7 @@ function valeurs(lignes: Ligne[], avecNom: boolean): string {
     .map((l) => `(${[
       l.id, l.acheteur_id ?? ACHETEUR, l.objet ?? "Objet", l.codecpv, "Marché", "Procédure adaptée",
       l.montant ?? 100000, l.datenotification, l.dureemois, l.offresrecues, l.lieu ?? "69",
-      l.typelieu ?? "Code département", "test",
+      l.typelieu ?? "Code département", l.source ?? "test",
       l.titulaire_id_1, l.titulaire_typeidentifiant_1, l.titulaire_id_2, l.titulaire_typeidentifiant_2,
       undefined, undefined, ...(avecNom ? [l.acheteur_nom] : []),
     ].map(v).join(", ")})`)
@@ -173,6 +173,46 @@ describe("normaliser les DECP", () => {
       { marche_uid: `${ACHETEUR}-S1`, titulaire_id: "22222222200022" },
       { marche_uid: `${ACHETEUR}-S1`, titulaire_id: "BE0123456789" },
       { marche_uid: `${ACHETEUR}-T1`, titulaire_id: "12345678900011" },
+    ]);
+  });
+});
+
+describe("dédoublonner les marchés transmis plusieurs fois", () => {
+  it("garde une seule source pour un même marché, et sépare les lots d'une même source", async () => {
+    const autre = await (await DuckDBInstance.create(":memory:")).connect();
+    await creerSource(autre, "vide_2019", [
+      { id: "V1", acheteur_id: "123", acheteur_nom: "Acheteur invalide", codecpv: "50000000-5", datenotification: "2025-01-01" },
+    ], true);
+    await creerSource(autre, "doublons_2022", [
+    // même marché transmis par la DGFIP et par la plateforme de l'acheteur : on garde la plateforme
+    { id: "R1", source: "DGFIP – PES MARCHÉ", objet: "GSC CABRIERES PLOMBERIE", codecpv: "45453100-8",
+      datenotification: "2025-06-16", dureemois: 12, montant: 70603,
+      titulaire_id_1: "66666666600066", titulaire_typeidentifiant_1: "SIRET" },
+    { id: "2025R1", source: "AIFE_ATLINE", objet: "Plomberie : rénovation du groupe scolaire des Cabrières",
+      codecpv: "45330000-9", datenotification: "2025-06-16", dureemois: 12, montant: 70603,
+      titulaire_id_1: "66666666600066", titulaire_typeidentifiant_1: "SIRET" },
+    // deux lots d'une même source, même montant et même titulaire : ce sont bien deux marchés
+    { id: "K1", source: "DGFIP – PES MARCHÉ", objet: "BRACKETS", codecpv: "33000000-0", datenotification: "2025-09-22",
+      dureemois: 12, montant: 60000, titulaire_id_1: "77777777700077", titulaire_typeidentifiant_1: "SIRET" },
+    { id: "K2", source: "DGFIP – PES MARCHÉ", objet: "MATRICES\\n  ANATOMIQUES", codecpv: "33000000-0", datenotification: "2025-09-22",
+      dureemois: 12, montant: 60000, titulaire_id_1: "77777777700077", titulaire_typeidentifiant_1: "SIRET" },
+    // le même envoi deux fois, l'identifiant allongé de zéros et l'objet répété
+    { id: "B401", source: "AIFE_ATLINE", objet: "Evacuation des balayures", codecpv: "90500000-2",
+      datenotification: "2025-09-11", dureemois: 12, montant: 215000,
+      titulaire_id_1: "88888888800088", titulaire_typeidentifiant_1: "SIRET" },
+    { id: "B40100000", source: "AIFE_ATLINE", objet: "Evacuation des balayures - Evacuation des balayures",
+      codecpv: "90500000-2", datenotification: "2025-09-11", dureemois: 12, montant: 215000,
+      titulaire_id_1: "88888888800088", titulaire_typeidentifiant_1: "SIRET" },
+    ], false);
+    await normaliser(autre, { "2019": "vide_2019", "2022": "doublons_2022" });
+    const marches = (await autre.runAndReadAll("select id_marche, objet from marches_norm order by id_marche"))
+      .getRowObjectsJson();
+    expect(marches).toEqual([
+      { id_marche: "2025R1", objet: "Plomberie : rénovation du groupe scolaire des Cabrières" },
+      { id_marche: "B401", objet: "Evacuation des balayures" },
+      { id_marche: "K1", objet: "BRACKETS" },
+      // l'objet perd ses « \n » littéraux et ses espaces en série
+      { id_marche: "K2", objet: "MATRICES ANATOMIQUES" },
     ]);
   });
 });
