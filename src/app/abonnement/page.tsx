@@ -23,7 +23,7 @@ export default async function PageAbonnement({ searchParams }: Props) {
     if (!compte) return null;
     return { compte, abonnement: await abonnementDuCompte(sql, compte.id) };
   })().finally(() => sql.end());
-  if (!donnees) redirect("/inscription");
+  if (!donnees) redirect("/connexion");
   const { compte, abonnement } = donnees;
   const jours = joursDEssai(abonnement);
 

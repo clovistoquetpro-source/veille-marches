@@ -20,11 +20,15 @@ import {
   suivreEntreprise,
 } from "../src/lib/concurrents";
 import { compteDeLaSession, creerCompte, desinscrire, fermerSession, ouvrirSession } from "../src/lib/comptes";
+import {
+  connecter, demanderReinitialisation, IDENTIFIANTS_INCORRECTS, LIEN_INVALIDE, lienValable, reinitialiserMotDePasse,
+  TROP_D_ESSAIS,
+} from "../src/lib/connexion";
 import type { Courriel } from "../src/lib/courriel";
 import { avisDuProfil, renouvellementsDuProfil } from "../src/lib/correspondance";
 import { listerAvis } from "../src/lib/avis";
 import { ficheEntreprise } from "../src/lib/entreprises";
-import { ficheLocale, inscrire, profilPropose } from "../src/lib/inscription";
+import { ADRESSE_DEJA_INSCRITE, ficheLocale, inscrire, profilPropose } from "../src/lib/inscription";
 import { INDISPONIBLE } from "../src/lib/annuaire";
 import { enregistrerProfil, profilDuCompte } from "../src/lib/profil";
 import { listerRenouvellements } from "../src/lib/renouvellements";
@@ -272,27 +276,30 @@ describe.skipIf(!locale)("comptes et veille personnalisée", () => {
     // entreprise non diffusible : on ne montre pas son nom
     expect((await ficheLocale(sql, "222222222"))?.nom).toBeNull();
 
-    const inscription = await inscrire(sql, { identifiant: "111 111 111", email: "repli@exemple.fr" }, enPanne);
+    const inscription = await inscrire(
+      sql, { identifiant: "111 111 111", email: "repli@exemple.fr", motDePasse: "un bon mot de passe" }, enPanne,
+    );
     expect(inscription).toMatchObject({ ok: true, entreprise: { siren: "111111111", nom: "NETTOYAGE DU RHONE" } });
     await sql`delete from comptes where email = 'repli@exemple.fr'`;
 
     // inconnue de notre base : on ne peut pas savoir si le numéro existe, on demande de réessayer
-    expect(await inscrire(sql, { identifiant: "333333333", email: "repli@exemple.fr" }, enPanne)).toEqual({
+    expect(await inscrire(
+      sql, { identifiant: "333333333", email: "repli@exemple.fr", motDePasse: "un bon mot de passe" }, enPanne,
+    )).toEqual({
       ok: false, erreur: "L'annuaire des entreprises ne répond pas pour l'instant. Réessayez dans une minute.",
     });
   });
 
   it("crée le compte, sa session et son profil, puis les retrouve", async () => {
-    const compte = await creerCompte(sql, {
+    const compte = (await creerCompte(sql, {
       email: "clo@exemple.fr", siren: annuaire.siren, siret: annuaire.siret, nom: annuaire.nom,
-    });
+    }))!;
     expect(compte).toMatchObject({ email: "clo@exemple.fr", siren: "111111111" });
-    // se réinscrire avec une autre entreprise ne crée pas un second compte
-    const encore = await creerCompte(sql, { email: "clo@exemple.fr", siren: "222222222", siret: null, nom: "AUTRE" });
-    expect(encore.id).toBe(compte.id);
+    // une adresse déjà inscrite ne crée pas un second compte et ne touche pas au premier
+    expect(await creerCompte(sql, { email: "clo@exemple.fr", siren: "222222222", siret: null, nom: "AUTRE" })).toBeNull();
 
     const session = await ouvrirSession(sql, compte.id);
-    expect(await compteDeLaSession(sql, session)).toMatchObject({ id: compte.id, nom: "AUTRE" });
+    expect(await compteDeLaSession(sql, session)).toMatchObject({ id: compte.id, nom: "NETTOYAGE DU RHONE" });
     expect(await compteDeLaSession(sql, "inconnue")).toBeNull();
     expect(await compteDeLaSession(sql, undefined)).toBeNull();
     await sql`update sessions set expire_le = now() - interval '1 day' where id = ${session}`;
@@ -324,6 +331,122 @@ describe.skipIf(!locale)("comptes et veille personnalisée", () => {
   });
 });
 
+/** Suite des précédentes : connexion par adresse et mot de passe, et mot de passe oublié. */
+describe.skipIf(!locale)("connexion par mot de passe", () => {
+  let sql: postgres.Sql;
+  const fiche = {
+    siren: "111111111", siret: "11111111100011", nom: "NETTOYAGE DU RHONE", naf: "81.21Z",
+    departement: "01", commune: "BOURG-EN-BRESSE", active: true,
+  };
+  const annuaire = async () => fiche;
+  const envoyes: Courriel[] = [];
+  const envoyeur = async (courriel: Courriel) => {
+    envoyes.push(courriel);
+  };
+  const site = "https://radar.exemple.fr";
+
+  beforeAll(async () => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  it("crée le compte avec son mot de passe, puis connecte seulement avec le bon", async () => {
+    const saisie = { identifiant: "11111111100011", email: "Motdepasse@Exemple.fr", motDePasse: "cheval-batterie-agrafe" };
+    expect(await inscrire(sql, { ...saisie, motDePasse: "court" }, annuaire)).toEqual({
+      ok: false, erreur: "Choisissez un mot de passe d'au moins 8 caractères.",
+    });
+    expect(await inscrire(sql, saisie, annuaire)).toMatchObject({ ok: true, compte: { email: "motdepasse@exemple.fr" } });
+    // le mot de passe n'est pas gardé en clair
+    const [{ mot_de_passe }] = await sql`select mot_de_passe from comptes where email = 'motdepasse@exemple.fr'`;
+    expect(mot_de_passe).toMatch(/^pbkdf2-sha256\$100000\$/);
+    expect(mot_de_passe).not.toContain("cheval");
+    // se réinscrire avec la même adresse ne prend pas la main sur le compte
+    expect(await inscrire(sql, { ...saisie, motDePasse: "un autre mot de passe" }, annuaire)).toEqual({
+      ok: false, erreur: ADRESSE_DEJA_INSCRITE,
+    });
+
+    expect(await connecter(sql, { email: " MOTDEPASSE@exemple.fr ", motDePasse: "cheval-batterie-agrafe" }))
+      .toMatchObject({ ok: true, compte: { email: "motdepasse@exemple.fr", siren: "111111111" } });
+    expect(await connecter(sql, { email: "motdepasse@exemple.fr", motDePasse: "un autre mot de passe" }))
+      .toEqual({ ok: false, erreur: IDENTIFIANTS_INCORRECTS });
+    // adresse inconnue ou compte sans mot de passe : même réponse, on ne dit pas qui est inscrit
+    expect(await connecter(sql, { email: "personne@exemple.fr", motDePasse: "cheval-batterie-agrafe" }))
+      .toEqual({ ok: false, erreur: IDENTIFIANTS_INCORRECTS });
+    await creerCompte(sql, { email: "ancien@exemple.fr", siren: null, siret: null, nom: null });
+    expect(await connecter(sql, { email: "ancien@exemple.fr", motDePasse: "" }))
+      .toEqual({ ok: false, erreur: IDENTIFIANTS_INCORRECTS });
+  });
+
+  it("bloque la connexion un quart d'heure après cinq essais ratés", async () => {
+    const essai = (motDePasse: string) => connecter(sql, { email: "motdepasse@exemple.fr", motDePasse });
+    expect(await essai("cheval-batterie-agrafe")).toMatchObject({ ok: true });
+    for (let i = 0; i < 4; i++) expect(await essai("faux")).toEqual({ ok: false, erreur: IDENTIFIANTS_INCORRECTS });
+    expect(await essai("faux")).toEqual({ ok: false, erreur: TROP_D_ESSAIS });
+    // même le bon mot de passe attend la fin du blocage
+    expect(await essai("cheval-batterie-agrafe")).toEqual({ ok: false, erreur: TROP_D_ESSAIS });
+    await sql`update comptes set bloque_jusqu_au = now() - interval '1 minute' where email = 'motdepasse@exemple.fr'`;
+    expect(await essai("cheval-batterie-agrafe")).toMatchObject({ ok: true });
+    const [{ echecs_connexion }] = await sql`select echecs_connexion from comptes where email = 'motdepasse@exemple.fr'`;
+    expect(echecs_connexion).toBe(0);
+  });
+
+  it("envoie un lien qui sert une fois pour choisir un nouveau mot de passe", async () => {
+    const [{ id }] = await sql`select id from comptes where email = 'motdepasse@exemple.fr'`;
+    const autreSession = await ouvrirSession(sql, id);
+    await demanderReinitialisation(sql, { email: "personne@exemple.fr", site }, envoyeur);
+    expect(envoyes).toEqual([]);
+
+    await demanderReinitialisation(sql, { email: "MotDePasse@exemple.fr", site: `${site}/` }, envoyeur);
+    expect(envoyes).toHaveLength(1);
+    expect(envoyes[0].a).toBe("motdepasse@exemple.fr");
+    const jeton = envoyes[0].texte.match(/connexion\/nouveau\?jeton=([0-9a-f]{64})/)?.[1];
+    expect(jeton).toBeDefined();
+    expect(envoyes[0].html).toContain(`${site}/connexion/nouveau?jeton=${jeton}`);
+    // la base ne garde que l'empreinte du jeton
+    expect(await sql`select 1 from reinitialisations where jeton_hash = ${jeton!}`).toHaveLength(0);
+    expect(await lienValable(sql, jeton!)).toBe(true);
+
+    expect(await reinitialiserMotDePasse(sql, { jeton: jeton!, motDePasse: "court" })).toEqual({
+      ok: false, erreur: "Choisissez un mot de passe d'au moins 8 caractères.",
+    });
+    expect(await reinitialiserMotDePasse(sql, { jeton: jeton!, motDePasse: "nouveau-mot-de-passe" }))
+      .toMatchObject({ ok: true, compte: { id } });
+    // le lien ne sert qu'une fois, et les autres sessions sont fermées
+    expect(await lienValable(sql, jeton!)).toBe(false);
+    expect(await reinitialiserMotDePasse(sql, { jeton: jeton!, motDePasse: "encore-un-autre" }))
+      .toEqual({ ok: false, erreur: LIEN_INVALIDE });
+    expect(await compteDeLaSession(sql, autreSession)).toBeNull();
+    expect(await connecter(sql, { email: "motdepasse@exemple.fr", motDePasse: "cheval-batterie-agrafe" }))
+      .toEqual({ ok: false, erreur: IDENTIFIANTS_INCORRECTS });
+    expect(await connecter(sql, { email: "motdepasse@exemple.fr", motDePasse: "nouveau-mot-de-passe" }))
+      .toMatchObject({ ok: true });
+
+    // un compte créé avant les mots de passe en choisit un de la même façon
+    envoyes.length = 0;
+    await demanderReinitialisation(sql, { email: "ancien@exemple.fr", site }, envoyeur);
+    const jetonAncien = envoyes[0].texte.match(/jeton=([0-9a-f]{64})/)![1];
+    expect(await reinitialiserMotDePasse(sql, { jeton: jetonAncien, motDePasse: "enfin-un-mot-de-passe" }))
+      .toMatchObject({ ok: true });
+    expect(await connecter(sql, { email: "ancien@exemple.fr", motDePasse: "enfin-un-mot-de-passe" }))
+      .toMatchObject({ ok: true });
+  });
+
+  it("n'envoie pas plus de trois liens par heure à une même adresse", async () => {
+    envoyes.length = 0;
+    for (let i = 0; i < 4; i++) await demanderReinitialisation(sql, { email: "ancien@exemple.fr", site }, envoyeur);
+    // le lien du test précédent a été consommé : il n'en reste pas, trois nouveaux partent
+    expect(envoyes).toHaveLength(3);
+    const [{ expire }] = await sql`
+      select bool_and(expire_le between now() + interval '59 minutes' and now() + interval '61 minutes') as expire
+      from reinitialisations r join comptes c on c.id = r.compte_id where c.email = 'ancien@exemple.fr'`;
+    expect(expire).toBe(true);
+    await sql`delete from comptes where email in ('motdepasse@exemple.fr', 'ancien@exemple.fr')`;
+  });
+});
+
 /** Suite des précédentes : envoi des alertes par courriel. */
 describe.skipIf(!locale)("alertes par courriel", () => {
   let sql: postgres.Sql;
@@ -335,15 +458,15 @@ describe.skipIf(!locale)("alertes par courriel", () => {
   beforeAll(async () => {
     sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
     // le marché S3 finit dans 9 mois : il entre dans la fenêtre de relance de 6 à 12 mois
-    const compte = await creerCompte(sql, {
+    const compte = (await creerCompte(sql, {
       email: "alerte@exemple.fr", siren: "111111111", siret: null, nom: "NETTOYAGE DU RHONE",
-    });
+    }))!;
     await enregistrerProfil(sql, compte.id, {
       cpv: ["90910"], mots_cles: [], departements: ["69"], origine: "historique", frequence: "hebdomadaire",
     });
     await ouvrirEssai(sql, compte.id);
     // un compte sans code CPV ni mot-clé ne doit jamais recevoir de courriel
-    const vide = await creerCompte(sql, { email: "vide@exemple.fr", siren: null, siret: null, nom: null });
+    const vide = (await creerCompte(sql, { email: "vide@exemple.fr", siren: null, siret: null, nom: null }))!;
     await enregistrerProfil(sql, vide.id, {
       cpv: [], mots_cles: [], departements: [], origine: "manuel", frequence: "hebdomadaire",
     });
@@ -450,7 +573,7 @@ describe.skipIf(!locale)("veille des concurrents", () => {
       date_limite: null, montant: 42000, titulaires: [{ nom: "Sas Propreté du Lyonnais", identifiant: null }],
     })]);
 
-    const compte = await creerCompte(sql, { email: "concurrents@exemple.fr", siren: "111111111", siret: null, nom: null });
+    const compte = (await creerCompte(sql, { email: "concurrents@exemple.fr", siren: "111111111", siret: null, nom: null }))!;
     compteId = compte.id;
     // aucun code CPV ni mot-clé : seuls ses concurrents lui valent des courriels
     await enregistrerProfil(sql, compteId, {
