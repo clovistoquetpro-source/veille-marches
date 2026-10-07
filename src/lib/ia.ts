@@ -1,34 +1,31 @@
 /**
  * Déduction du profil de veille par l'IA, pour les entreprises qui n'ont pas encore gagné assez de
- * marchés publics pour qu'on devine ce qu'elles cherchent. On force une réponse structurée (outil
- * Anthropic) puis on la filtre : seuls des préfixes CPV, des mots-clés courts et des départements
+ * marchés publics pour qu'on devine ce qu'elles cherchent. On impose une réponse au format JSON
+ * puis on la filtre : seuls des préfixes CPV, des mots-clés courts et des départements
  * connus sont retenus, et une erreur de l'API n'empêche jamais l'inscription.
  */
+import { demanderJson } from "./claude";
 import { DIVISIONS_CPV } from "./nomenclatures";
 import { nettoyerProfil, type Profil } from "./profil";
 
-const API = "https://api.anthropic.com/v1/messages";
 const MODELE = "claude-sonnet-5-5";
 
-const OUTIL = {
-  name: "profil_de_veille",
-  description: "Enregistre les marchés publics qui intéressent cette entreprise.",
-  input_schema: {
-    type: "object",
-    properties: {
-      cpv: {
-        type: "array",
-        items: { type: "string" },
-        description: "Préfixes de codes CPV, de 2 à 8 chiffres, du plus pertinent au moins pertinent (6 au maximum).",
-      },
-      mots_cles: {
-        type: "array",
-        items: { type: "string" },
-        description: "Mots que l'on retrouve dans l'objet des avis qui l'intéressent (5 au maximum).",
-      },
+const SCHEMA = {
+  type: "object",
+  properties: {
+    cpv: {
+      type: "array",
+      items: { type: "string" },
+      description: "Préfixes de codes CPV, de 2 à 8 chiffres, du plus pertinent au moins pertinent (6 au maximum).",
     },
-    required: ["cpv", "mots_cles"],
+    mots_cles: {
+      type: "array",
+      items: { type: "string" },
+      description: "Mots que l'on retrouve dans l'objet des avis qui l'intéressent (5 au maximum).",
+    },
   },
+  required: ["cpv", "mots_cles"],
+  additionalProperties: false,
 } as const;
 
 export type EntrepriseAProfiler = {
@@ -67,28 +64,11 @@ export async function profilParIa(
   modele = process.env.MODELE_IA ?? MODELE,
 ): Promise<Profil | null> {
   if (!cle) return null;
-  try {
-    const reponse = await fetch(API, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": cle, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({
-        model: modele,
-        max_tokens: 1024,
-        tools: [OUTIL],
-        tool_choice: { type: "tool", name: OUTIL.name },
-        messages: [{ role: "user", content: consigne(e) }],
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!reponse.ok) return null;
-    const corps = (await reponse.json()) as { content?: { type: string; name?: string; input?: unknown }[] };
-    const outil = corps.content?.find((bloc) => bloc.type === "tool_use" && bloc.name === OUTIL.name);
-    const propose = outil?.input as Partial<Profil> | undefined;
-    if (!propose) return null;
-    const { cpv, mots_cles } = nettoyerProfil(propose);
-    if (cpv.length === 0 && mots_cles.length === 0) return null;
-    return { cpv: cpv.slice(0, 6), mots_cles: mots_cles.slice(0, 5), departements: [], origine: "ia" };
-  } catch {
-    return null; // l'inscription se poursuit avec le profil de repli
-  }
+  const reponse = await demanderJson<Partial<Profil>>({
+    cle, modele, contenu: consigne(e), schema: SCHEMA, maxTokens: 4096, effort: "low", delai: 30_000,
+  });
+  if (!reponse) return null; // l'inscription se poursuit avec le profil de repli
+  const { cpv, mots_cles } = nettoyerProfil(reponse.donnees);
+  if (cpv.length === 0 && mots_cles.length === 0) return null;
+  return { cpv: cpv.slice(0, 6), mots_cles: mots_cles.slice(0, 5), departements: [], origine: "ia" };
 }

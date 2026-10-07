@@ -14,6 +14,10 @@ import { exporterCsv, normaliser } from "../src/ingest/decp";
 import { chargerEntreprises } from "../src/ingest/sirene";
 import { ficheAcheteur } from "../src/lib/acheteurs";
 import { abonnementDuCompte, majAbonnement, ouvrirEssai } from "../src/lib/abonnements";
+import {
+  analyseDuCompte, analysesDeLAvis, analysesRestantes, depotsRecents, enregistrerAnalyse, enregistrerFichier,
+  fichiersDuCompte, oublierFichiers, type ResultatAnalyse,
+} from "../src/lib/analyse";
 import { destinataires, envoyerAlertes } from "../src/lib/alertes";
 import {
   chercherConcurrents, concurrentsDuCompte, concurrentsProbables, estSuivie, gainsDesConcurrents, nePlusSuivre,
@@ -30,6 +34,7 @@ import { listerAvis } from "../src/lib/avis";
 import { ficheEntreprise } from "../src/lib/entreprises";
 import { ADRESSE_DEJA_INSCRITE, ficheLocale, inscrire, profilPropose } from "../src/lib/inscription";
 import { INDISPONIBLE } from "../src/lib/annuaire";
+import { ANALYSES_PAR_MOIS } from "../src/lib/produit";
 import { enregistrerProfil, profilDuCompte } from "../src/lib/profil";
 import { listerRenouvellements } from "../src/lib/renouvellements";
 
@@ -749,5 +754,53 @@ describe.skipIf(!locale)("tenir dans l'offre gratuite de Supabase", () => {
     expect(await purgerAvis(sql)).toBe(2);
     const restants = await sql`select uid from avis where uid in ('boamp-25-1', 'boamp-25-2', 'boamp-25-3', 'boamp-26-9') order by uid`;
     expect(restants.map((r) => r.uid)).toEqual(["boamp-25-3", "boamp-26-9"]);
+  });
+});
+
+describe.skipIf(!locale)("analyse des dossiers par l'IA", () => {
+  let sql: postgres.Sql;
+
+  beforeAll(async () => {
+    sql = postgres(url!, { max: 1, onnotice: () => {}, fetch_types: false });
+  });
+
+  afterAll(async () => {
+    await sql?.end();
+  });
+
+  it("ne laisse analyser que ses propres fichiers, enregistre l'analyse et décompte le quota du mois", async () => {
+    const moi = (await creerCompte(sql, { email: "analyse@exemple.fr", siren: null, siret: null, nom: null }))!;
+    const autre = (await creerCompte(sql, { email: "voisin@exemple.fr", siren: null, siret: null, nom: null }))!;
+    await enregistrerFichier(sql, moi.id, { id: "file_rc", nom: "RC.pdf", taille: 1000 });
+    await enregistrerFichier(sql, autre.id, { id: "file_autre", nom: "secret.pdf", taille: 1000 });
+    expect(await depotsRecents(sql, moi.id)).toBe(1);
+    expect(await fichiersDuCompte(sql, moi.id, ["file_autre", "file_rc"])).toEqual([{ fichier_id: "file_rc", nom: "RC.pdf" }]);
+
+    expect(await analysesRestantes(sql, moi.id)).toBe(ANALYSES_PAR_MOIS);
+    const resultat: ResultatAnalyse = {
+      verdict: "a_etudier", resume: "Faisable.", raisons_pour: ["Proche"], raisons_contre: [], exigences: [
+        { exigence: "Qualibat 1552 (RC, art. 6)", eliminatoire: true, statut: "a_verifier" },
+      ], pieces_a_fournir: ["DC1"], criteres: [{ critere: "Prix", poids: "60 %" }], dates: [],
+      montant_duree: "non précisé", questions_acheteur: [],
+    };
+    const id = await enregistrerAnalyse(sql, {
+      compteId: moi.id, avisUid: "boamp-26-1", fichiers: ["RC.pdf", "CCTP \"final\".pdf"], resultat,
+      modele: "claude-sonnet-5-5", consommation: { entree: 120_000, sortie: 3_000 },
+    });
+    expect(await analysesRestantes(sql, moi.id)).toBe(ANALYSES_PAR_MOIS - 1);
+    expect(await analysesRestantes(sql, autre.id)).toBe(ANALYSES_PAR_MOIS);
+    // une analyse du mois dernier ne compte plus
+    await sql`update analyses set cree_le = date_trunc('month', now()) - interval '2 days' where id = ${id}`;
+    expect(await analysesRestantes(sql, moi.id)).toBe(ANALYSES_PAR_MOIS);
+
+    expect(await analyseDuCompte(sql, moi.id, id)).toMatchObject({ fichiers: ["RC.pdf", "CCTP \"final\".pdf"], resultat });
+    expect(await analyseDuCompte(sql, autre.id, id)).toBeNull();
+    expect(await analyseDuCompte(sql, moi.id, "pas-un-identifiant")).toBeNull();
+    expect((await analysesDeLAvis(sql, moi.id, "boamp-26-1")).map((a) => a.id)).toEqual([id]);
+
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 200 })));
+    await oublierFichiers(sql, "cle", ["file_rc"]);
+    vi.unstubAllGlobals();
+    expect(await fichiersDuCompte(sql, moi.id, ["file_rc"])).toEqual([]);
   });
 });
