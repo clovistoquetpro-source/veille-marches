@@ -8,7 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NOM } from "@/lib/produit";
 
-const PAGES_IMMERSIVES = new Set(["/inscription", "/connexion", "/connexion/nouveau"]);
+const PAGES_IMMERSIVES = new Set(["/", "/inscription", "/connexion", "/connexion/nouveau"]);
 
 function immersive(chemin: string | null) {
   return chemin !== null && PAGES_IMMERSIVES.has(chemin);
