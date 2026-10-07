@@ -52,6 +52,7 @@ export async function chercherEntreprise(
   if (numero.length !== 9 && numero.length !== 14) return null;
   const url = `${RECHERCHE}?q=${numero}&per_page=1&minimal=false`;
   let resultat: Resultat | undefined;
+  let panne = "";
   for (let essai = 1; ; essai++) {
     try {
       const reponse = await fetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -61,10 +62,16 @@ export async function chercherEntreprise(
       }
       // au-delà de 7 requêtes par seconde, l'API répond 429 : on réessaie un peu plus tard, comme sur une panne
       if (reponse.status !== 429 && reponse.status < 500) return null;
-    } catch {
+      panne = `erreur ${reponse.status}`;
+    } catch (erreur) {
       // coupure réseau ou délai dépassé : on réessaie
+      panne = String(erreur);
     }
-    if (essai >= essais) return INDISPONIBLE;
+    if (essai >= essais) {
+      // visible dans les journaux du Worker, pour distinguer une limite de débit d'une coupure
+      console.warn(`Annuaire des entreprises indisponible après ${essais} essais : ${panne}`);
+      return INDISPONIBLE;
+    }
     await new Promise((r) => setTimeout(r, 1000 * essai));
   }
   if (!resultat || resultat.siren !== numero.slice(0, 9)) return null;

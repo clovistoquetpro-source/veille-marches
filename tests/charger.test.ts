@@ -24,7 +24,8 @@ import type { Courriel } from "../src/lib/courriel";
 import { avisDuProfil, renouvellementsDuProfil } from "../src/lib/correspondance";
 import { listerAvis } from "../src/lib/avis";
 import { ficheEntreprise } from "../src/lib/entreprises";
-import { profilPropose } from "../src/lib/inscription";
+import { ficheLocale, inscrire, profilPropose } from "../src/lib/inscription";
+import { INDISPONIBLE } from "../src/lib/annuaire";
 import { enregistrerProfil, profilDuCompte } from "../src/lib/profil";
 import { listerRenouvellements } from "../src/lib/renouvellements";
 
@@ -259,6 +260,25 @@ describe.skipIf(!locale)("comptes et veille personnalisée", () => {
     // un seul marché gagné : pas assez pour deviner, on retombe sur l'activité déclarée et son département
     expect(await profilPropose(sql, annuaire)).toEqual({
       cpv: [], mots_cles: ["nettoyage", "courant", "bâtiments"], departements: ["01"], origine: "manuel",
+    });
+  });
+
+  it("inscrit une entreprise déjà connue de notre base quand l'annuaire ne répond pas", async () => {
+    const enPanne = async (): Promise<typeof INDISPONIBLE> => INDISPONIBLE;
+    expect(await ficheLocale(sql, "11111111100011")).toEqual({
+      siren: "111111111", siret: "11111111100011", nom: "NETTOYAGE DU RHONE", naf: "81.21Z",
+      departement: null, commune: null, active: true,
+    });
+    // entreprise non diffusible : on ne montre pas son nom
+    expect((await ficheLocale(sql, "222222222"))?.nom).toBeNull();
+
+    const inscription = await inscrire(sql, { identifiant: "111 111 111", email: "repli@exemple.fr" }, enPanne);
+    expect(inscription).toMatchObject({ ok: true, entreprise: { siren: "111111111", nom: "NETTOYAGE DU RHONE" } });
+    await sql`delete from comptes where email = 'repli@exemple.fr'`;
+
+    // inconnue de notre base : on ne peut pas savoir si le numéro existe, on demande de réessayer
+    expect(await inscrire(sql, { identifiant: "333333333", email: "repli@exemple.fr" }, enPanne)).toEqual({
+      ok: false, erreur: "L'annuaire des entreprises ne répond pas pour l'instant. Réessayez dans une minute.",
     });
   });
 

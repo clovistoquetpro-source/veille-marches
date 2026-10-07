@@ -42,10 +42,32 @@ export async function profilPropose(sql: postgres.Sql, fiche: FicheAnnuaire): Pr
   return profil;
 }
 
+/**
+ * Repli quand l'annuaire ne répond pas : notre base Sirene contient déjà toutes les entreprises
+ * vues dans un marché ou un avis, celles qui ont le plus de chances de s'inscrire. Elle ne donne
+ * pas le département : le profil proposé reste national, le client le corrige.
+ */
+export async function ficheLocale(sql: postgres.Sql, numero: string): Promise<FicheAnnuaire | null> {
+  const siren = numero.slice(0, 9);
+  const [entreprise] = await sql<{ nom: string | null; naf: string | null; active: boolean; diffusible: boolean }[]>`
+    select nom, naf, active, diffusible from entreprises where siren = ${siren}`;
+  if (!entreprise) return null;
+  return {
+    siren,
+    siret: numero.length === 14 ? numero : null,
+    nom: entreprise.diffusible ? entreprise.nom : null,
+    naf: entreprise.naf,
+    departement: null,
+    commune: null,
+    active: entreprise.active,
+  };
+}
+
 /** Crée le compte et son profil de veille. */
 export async function inscrire(
   sql: postgres.Sql,
   saisie: { identifiant: string; email: string },
+  annuaire = chercherEntreprise,
 ): Promise<Inscription> {
   const email = normaliserEmail(saisie.email);
   if (!email) return { ok: false, erreur: "Cette adresse électronique n'est pas valable." };
@@ -53,7 +75,8 @@ export async function inscrire(
   if (numero.length !== 9 && numero.length !== 14) {
     return { ok: false, erreur: "Un SIRET fait 14 chiffres (un SIREN, 9). Il figure sur vos factures." };
   }
-  const entreprise = await chercherEntreprise(numero);
+  let entreprise = await annuaire(numero);
+  if (entreprise === INDISPONIBLE) entreprise = await ficheLocale(sql, numero) ?? INDISPONIBLE;
   if (entreprise === INDISPONIBLE) {
     return { ok: false, erreur: "L'annuaire des entreprises ne répond pas pour l'instant. Réessayez dans une minute." };
   }
