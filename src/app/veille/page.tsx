@@ -38,7 +38,7 @@ export default async function PageVeille() {
     const suggestions = concurrents.length < 3 ? await concurrentsProbables(sql, compte.id, profil, compte.siren) : [];
     return { compte, profil, avis, renouvellements, abonnement, concurrents, gains, suggestions };
   })().finally(() => sql.end());
-  if (!donnees) redirect("/inscription");
+  if (!donnees) redirect("/connexion");
   const { compte, profil, avis, renouvellements, abonnement, concurrents, gains, suggestions } = donnees;
   const jours = joursDEssai(abonnement);
 

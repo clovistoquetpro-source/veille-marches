@@ -35,7 +35,8 @@ Variables : voir `.env.example`.
 
 ## Inscription et profil de veille
 
-Le client ne donne que son SIRET. On demande son nom et son activité à l'[annuaire des
+Le client crée son compte sur `/connexion?mode=creer` avec son SIRET, son adresse et un mot de passe.
+On demande son nom et son activité à l'[annuaire des
 entreprises](https://recherche-entreprises.api.gouv.fr) (API publique, sans clé), puis on lui propose
 un profil de veille :
 
@@ -47,6 +48,12 @@ Le profil est modifiable sur `/veille` : préfixes CPV, mots-clés cherchés dan
 départements (vide = toute la France). Un avis correspond quand son code CPV commence par l'un des
 préfixes **ou** que son objet contient l'un des mots-clés, et qu'il s'exécute dans l'un des
 départements suivis. Les mêmes règles serviront aux alertes par courriel.
+
+Il se connecte ensuite sur `/connexion` avec son adresse et son mot de passe. On ne garde que l'empreinte
+PBKDF2 salée du mot de passe (100 000 itérations, le plafond de Cloudflare Workers) ; au cinquième essai
+raté d'affilée, la connexion est bloquée un quart d'heure. « Mot de passe oublié » envoie par Brevo un
+lien valable une heure, qui ne sert qu'une fois et ferme les autres sessions. Une adresse déjà inscrite
+ne peut pas recréer de compte : les comptes créés avant les mots de passe en choisissent un par ce lien.
 
 La session est un identifiant tiré au sort, déposé dans un cookie et conservé un mois en base.
 
@@ -96,7 +103,8 @@ l'onglet *Actions*.
    variables `SITE_URL`, `COURRIEL_ADRESSE`. Sans eux, les imports, les alertes et le déploiement sont sautés.
 4. Les secrets du site (`DATABASE_URL`, `ANTHROPIC_API_KEY`, `BREVO_API_KEY`, `STRIPE_SECRET_KEY`,
    `STRIPE_PRIX`, `STRIPE_WEBHOOK_SECRET`) se saisissent aussi dans GitHub : chaque déploiement les copie
-   dans le Worker (`wrangler secret bulk`). Les variables `SITE_URL` et `EDITEUR_*` se saisissent dans le
+   dans le Worker (`wrangler secret bulk`), avec la variable `COURRIEL_ADRESSE`, expéditeur des courriels
+   « mot de passe oublié ». Les variables `SITE_URL` et `EDITEUR_*` se saisissent dans le
    tableau de bord du Worker (*Settings > Variables*) et sont conservées à chaque déploiement (`keep_vars`).
    L'offre gratuite de Workers ne suffit pas : elle coupe chaque requête après 10 ms de calcul, et les
    pages avec des données en demandent une vingtaine. Il faut l'offre Workers Paid (5 $ par mois).

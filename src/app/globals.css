@@ -26,181 +26,333 @@ body {
 }
 
 /*
- * Nouveau design (fond sombre, verre dépoli, sphère liquide), page d'inscription d'abord.
+ * Nouveau design (fond sombre, verre dépoli, sphère liquide) : accueil de l'inscription et connexion.
  * Toutes les transitions partagent la même courbe, lente au départ de l'arrêt : c'est elle qui donne
  * l'impression de fluidité.
  */
-:root {
-  --doux: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.scene-fond {
-  background:
-    radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.5), transparent),
-    radial-gradient(1px 1px at 82% 9%, rgb(255 255 255 / 0.35), transparent),
-    radial-gradient(1px 1px at 4% 72%, rgb(255 255 255 / 0.4), transparent),
-    radial-gradient(1px 1px at 95% 64%, rgb(255 255 255 / 0.3), transparent),
-    #1c1a26;
-}
-
-.scene {
-  background:
-    radial-gradient(1px 1px at 22% 30%, rgb(255 255 255 / 0.45), transparent),
-    radial-gradient(1px 1px at 71% 22%, rgb(255 255 255 / 0.3), transparent),
-    radial-gradient(1px 1px at 86% 41%, rgb(255 255 255 / 0.4), transparent),
-    radial-gradient(1px 1px at 9% 47%, rgb(255 255 255 / 0.3), transparent),
-    radial-gradient(1px 1px at 58% 12%, rgb(255 255 255 / 0.35), transparent),
-    radial-gradient(90% 60% at 12% 0%, rgb(128 116 186 / 0.22), transparent 70%),
-    #0b0b0f;
-}
-
-.verre {
-  /* un verre fumé : la sphère passe derrière sans gêner la lecture */
-  background: linear-gradient(rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02)), rgb(11 11 15 / 0.5);
-  border: 1px solid rgb(255 255 255 / 0.09);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
-  transition: border-color 0.6s var(--doux), background-color 0.6s var(--doux), transform 0.6s var(--doux);
-}
-a.verre:hover {
-  background: linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.04)), rgb(11 11 15 / 0.5);
-  border-color: rgb(255 255 255 / 0.18);
-  transform: translateY(-3px);
-}
-
-.lien-doux {
-  transition: color 0.4s var(--doux);
-}
-.lien-doux:hover {
-  color: #fff;
-}
-
-.pilule-discrete {
-  border-radius: 9999px;
-  background: rgb(255 255 255 / 0.07);
-  padding: 0.55rem 1.1rem;
-  font-size: 0.875rem;
-  transition: background-color 0.4s var(--doux);
-}
-.pilule-discrete:hover {
-  background: rgb(255 255 255 / 0.14);
-}
-
-.champ {
-  display: block;
-  width: 100%;
-  height: 3.25rem;
-  border-radius: 1rem;
-  border: 1px solid rgb(255 255 255 / 0.1);
-  background: rgb(255 255 255 / 0.04);
-  padding: 0 1rem;
-  font-size: 1rem;
-  color: #fff;
-  outline: none;
-  transition: border-color 0.5s var(--doux), background-color 0.5s var(--doux), box-shadow 0.5s var(--doux);
-}
-.champ::placeholder {
-  color: rgb(255 255 255 / 0.3);
-}
-.champ:hover {
-  border-color: rgb(255 255 255 / 0.18);
-}
-.champ:focus {
-  border-color: rgb(255 255 255 / 0.4);
-  background: rgb(255 255 255 / 0.07);
-  box-shadow: 0 0 0 4px rgb(255 255 255 / 0.06);
-}
-
-.bouton-principal {
-  position: relative;
-  display: block;
-  width: 100%;
-  height: 3.25rem;
-  border-radius: 9999px;
-  background: #fff;
-  color: #0b0b0f;
-  font-size: 0.95rem;
-  font-weight: 600;
-  transition: transform 0.5s var(--doux), box-shadow 0.5s var(--doux), background-color 0.5s var(--doux);
-}
-.bouton-principal:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 40px rgb(255 255 255 / 0.14);
-}
-.bouton-principal:active:not(:disabled) {
-  transform: scale(0.985);
-  transition-duration: 0.15s;
-}
-.bouton-principal:disabled {
-  background: #e4e4ea;
-  cursor: progress;
-}
-.bouton-principal:focus-visible,
-.pilule-discrete:focus-visible,
-a.verre:focus-visible,
-.lien-doux:focus-visible {
-  outline: 2px solid #fff;
-  outline-offset: 3px;
-}
-
-/* bloc qui s'ouvre en douceur : la grille passe de 0 à la hauteur de son contenu */
-.depliant {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition: grid-template-rows 0.5s var(--doux), opacity 0.5s var(--doux);
-}
-.depliant > div {
-  overflow: hidden;
-}
-.depliant.ouvert {
-  grid-template-rows: 1fr;
-  opacity: 1;
-}
-
-/* la sphère : un carré centré dont on ne voit que le haut, coupé par le bas de la scène */
-.sphere-cadre {
-  --cote: min(1150px, 150vw);
-}
-.sphere-liquide {
-  position: absolute;
-  left: 50%;
-  bottom: calc(var(--cote) * -0.44);
-  width: var(--cote);
-  height: var(--cote);
-  transform: translateX(-50%);
-  opacity: 0;
-  transition: opacity 1.8s var(--doux);
-}
-.sphere-liquide[data-prete="oui"] {
-  opacity: 1;
-}
-.contenu {
-  padding-bottom: calc(min(1150px, 150vw) * 0.3);
-}
-
-/* une seule entrée en scène, au chargement */
-@keyframes apparition {
-  from {
-    opacity: 0;
-    transform: translateY(14px);
-    filter: blur(6px);
+/* dans le calque « components » : les classes utilitaires de Tailwind peuvent les ajuster */
+@layer components {
+  :root {
+    --doux: cubic-bezier(0.22, 1, 0.36, 1);
   }
-}
-.apparition {
-  animation: apparition 1.1s var(--doux) both;
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .apparition {
-    animation: none;
+  .scene-fond {
+    background:
+      radial-gradient(1px 1px at 12% 18%, rgb(255 255 255 / 0.5), transparent),
+      radial-gradient(1px 1px at 82% 9%, rgb(255 255 255 / 0.35), transparent),
+      radial-gradient(1px 1px at 4% 72%, rgb(255 255 255 / 0.4), transparent),
+      radial-gradient(1px 1px at 95% 64%, rgb(255 255 255 / 0.3), transparent),
+      #1c1a26;
   }
-  .sphere-liquide,
-  .verre,
-  .champ,
-  .bouton-principal,
+
+  .scene {
+    background:
+      radial-gradient(1px 1px at 22% 30%, rgb(255 255 255 / 0.45), transparent),
+      radial-gradient(1px 1px at 71% 22%, rgb(255 255 255 / 0.3), transparent),
+      radial-gradient(1px 1px at 86% 41%, rgb(255 255 255 / 0.4), transparent),
+      radial-gradient(1px 1px at 9% 47%, rgb(255 255 255 / 0.3), transparent),
+      radial-gradient(1px 1px at 58% 12%, rgb(255 255 255 / 0.35), transparent),
+      radial-gradient(90% 60% at 12% 0%, rgb(128 116 186 / 0.22), transparent 70%),
+      #0b0b0f;
+  }
+
+  .verre {
+    /* un verre fumé : la sphère passe derrière sans gêner la lecture */
+    background: linear-gradient(rgb(255 255 255 / 0.06), rgb(255 255 255 / 0.02)), rgb(11 11 15 / 0.5);
+    border: 1px solid rgb(255 255 255 / 0.09);
+    backdrop-filter: blur(18px) saturate(140%);
+    -webkit-backdrop-filter: blur(18px) saturate(140%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
+    transition: border-color 0.6s var(--doux), background-color 0.6s var(--doux), transform 0.6s var(--doux);
+  }
+  /* verre plus dense pour les formulaires : les reflets de la sphère ne passent pas sous les champs */
+  .verre-dense {
+    background: linear-gradient(rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.02)), rgb(11 11 15 / 0.86);
+    backdrop-filter: blur(30px) saturate(140%);
+    -webkit-backdrop-filter: blur(30px) saturate(140%);
+  }
+  a.verre:hover {
+    background: linear-gradient(rgb(255 255 255 / 0.09), rgb(255 255 255 / 0.04)), rgb(11 11 15 / 0.5);
+    border-color: rgb(255 255 255 / 0.18);
+    transform: translateY(-3px);
+  }
+
+  .lien-doux {
+    transition: color 0.4s var(--doux);
+  }
+  .lien-doux:hover {
+    color: #fff;
+  }
+
+  .pilule-discrete {
+    border-radius: 9999px;
+    background: rgb(255 255 255 / 0.07);
+    padding: 0.55rem 1.1rem;
+    font-size: 0.875rem;
+    transition: background-color 0.4s var(--doux);
+  }
+  .pilule-discrete:hover {
+    background: rgb(255 255 255 / 0.14);
+  }
+
+  .champ {
+    display: block;
+    width: 100%;
+    height: 3.25rem;
+    border-radius: 1rem;
+    border: 1px solid rgb(255 255 255 / 0.1);
+    background: rgb(255 255 255 / 0.04);
+    padding: 0 1rem;
+    font-size: 1rem;
+    color: #fff;
+    outline: none;
+    transition: border-color 0.5s var(--doux), background-color 0.5s var(--doux), box-shadow 0.5s var(--doux);
+  }
+  .champ::placeholder {
+    color: rgb(255 255 255 / 0.3);
+  }
+  .champ:hover {
+    border-color: rgb(255 255 255 / 0.18);
+  }
+  .champ:focus {
+    border-color: rgb(255 255 255 / 0.4);
+    background: rgb(255 255 255 / 0.07);
+    box-shadow: 0 0 0 4px rgb(255 255 255 / 0.06);
+  }
+
+  .bouton-principal {
+    position: relative;
+    display: block;
+    width: 100%;
+    height: 3.25rem;
+    border-radius: 9999px;
+    background: #fff;
+    color: #0b0b0f;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: transform 0.5s var(--doux), box-shadow 0.5s var(--doux), background-color 0.5s var(--doux);
+  }
+  .bouton-principal:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 40px rgb(255 255 255 / 0.14);
+  }
+  .bouton-principal:active:not(:disabled) {
+    transform: scale(0.985);
+    transition-duration: 0.15s;
+  }
+  .bouton-principal:disabled {
+    background: #e4e4ea;
+    cursor: progress;
+  }
+  .bouton-principal:focus-visible,
+  .pilule-discrete:focus-visible,
+  a.verre:focus-visible,
+  .lien-doux:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+
+  /* bloc qui s'ouvre en douceur : la grille passe de 0 à la hauteur de son contenu */
   .depliant {
-    transition: none;
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.5s var(--doux), opacity 0.5s var(--doux);
+  }
+  .depliant > div {
+    overflow: hidden;
+  }
+  .depliant.ouvert {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+
+  /*
+   * La sphère, centrée sur la scène : derrière les boutons de l'accueil, derrière le panneau de connexion.
+   * Le canevas est un carré ; la sphère en occupe les deux tiers.
+   */
+  .sphere-cadre {
+    --cote: min(104svh, 980px, 150vw);
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--cote);
+    height: var(--cote);
+    transform: translate(-50%, -50%);
+  }
+  .sphere-liquide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transition: opacity 1.8s var(--doux);
+  }
+  .sphere-liquide[data-prete="oui"] {
+    opacity: 1;
+  }
+
+  /* bouton blanc dans une rangée (lien de l'accueil) : largeur de son texte, toute la ligne sur mobile */
+  .bouton-principal.bouton-ligne {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    padding: 0 1.9rem;
+  }
+
+  /* deuxième bouton, en verre, à côté du bouton blanc */
+  .bouton-verre {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 3.25rem;
+    border-radius: 9999px;
+    padding: 0 1.6rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgb(255 255 255 / 0.08);
+    border: 1px solid rgb(255 255 255 / 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: transform 0.5s var(--doux), background-color 0.5s var(--doux), border-color 0.5s var(--doux);
+  }
+  .bouton-verre:hover {
+    transform: translateY(-1px);
+    background: rgb(255 255 255 / 0.14);
+    border-color: rgb(255 255 255 / 0.28);
+  }
+  .bouton-verre:active {
+    transform: scale(0.985);
+    transition-duration: 0.15s;
+  }
+  .bouton-verre:focus-visible,
+  .bascule button:focus-visible,
+  .lien-souligne:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+  }
+
+  /* « Se connecter | Créer un compte » : la pastille blanche glisse sous l'onglet choisi */
+  .bascule {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 4px;
+    border-radius: 9999px;
+    background: rgb(255 255 255 / 0.06);
+    border: 1px solid rgb(255 255 255 / 0.08);
+  }
+  .bascule::before {
+    content: "";
+    position: absolute;
+    inset: 4px auto 4px 4px;
+    width: calc(50% - 4px);
+    border-radius: 9999px;
+    background: #fff;
+    transform: translateX(var(--decalage, 0%));
+    transition: transform 0.6s var(--doux);
+  }
+  .bascule[data-choix="creer"] {
+    --decalage: 100%;
+  }
+  .bascule button {
+    position: relative;
+    height: 2.5rem;
+    border-radius: 9999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #a3a3b2;
+    transition: color 0.5s var(--doux);
+  }
+  .bascule button[aria-pressed="true"] {
+    color: #0b0b0f;
+  }
+  .bascule button[aria-pressed="false"]:hover {
+    color: #fff;
+  }
+
+  /*
+   * Volets du panneau de connexion : empilés au même endroit, l'actif apparaît pendant que l'autre
+   * s'efface ; la hauteur du panneau suit en douceur (voir panneau.tsx).
+   */
+  /* coupé pendant que la hauteur s'ajuste ; la marge de 6 px laisse voir les halos de focus */
+  .volets {
+    position: relative;
+    overflow: hidden;
+    margin: -6px;
+    padding: 6px;
+    transition: height 0.6s var(--doux);
+  }
+  .volet {
+    transition: opacity 0.45s var(--doux), transform 0.6s var(--doux), filter 0.45s var(--doux), visibility 0s linear 0s;
+  }
+  .volet[data-actif="non"] {
+    position: absolute;
+    inset: 6px 6px auto 6px;
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+    filter: blur(4px);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.35s var(--doux), transform 0.5s var(--doux), filter 0.35s var(--doux), visibility 0s linear 0.35s;
+  }
+
+  .lien-souligne {
+    text-decoration: underline;
+    text-decoration-color: rgb(255 255 255 / 0.25);
+    text-underline-offset: 3px;
+    transition: color 0.4s var(--doux), text-decoration-color 0.4s var(--doux);
+  }
+  .lien-souligne:hover {
+    color: #fff;
+    text-decoration-color: rgb(255 255 255 / 0.7);
+  }
+
+  /* le titre de l'accueil suit la hauteur de l'écran : il laisse toujours les boutons devant la sphère */
+  .titre-scene {
+    font-size: clamp(36px, 5.4svh, 44px);
+  }
+  @media (min-width: 640px) {
+    .titre-scene {
+      font-size: clamp(44px, 7.4svh, 68px);
+    }
+  }
+
+  /* textes posés sur la sphère : une ombre douce les détache des reflets */
+  .sur-sphere {
+    text-shadow: 0 1px 16px rgb(11 11 15 / 0.95), 0 0 3px rgb(11 11 15 / 0.7);
+  }
+
+  /* une seule entrée en scène, au chargement */
+  @keyframes apparition {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+      filter: blur(6px);
+    }
+  }
+  .apparition {
+    animation: apparition 1.1s var(--doux) both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .apparition {
+      animation: none;
+    }
+    .sphere-liquide,
+    .verre,
+    .champ,
+    .bouton-principal,
+    .bouton-verre,
+    .bascule::before,
+    .volets,
+    .volet,
+    .volet[data-actif="non"],
+    .depliant {
+      transition: none;
+    }
   }
 }

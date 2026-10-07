@@ -1,13 +1,14 @@
 /**
- * Inscription : le client ne donne que son SIRET et son adresse. On va chercher son entreprise dans
+ * Inscription : le client donne son SIRET, son adresse et un mot de passe. On va chercher son entreprise dans
  * l'annuaire public, on regarde ce qu'elle a déjà gagné comme marchés, et on lui propose un profil
  * de veille qu'il n'a plus qu'à corriger.
  */
 import type postgres from "postgres";
 import { chercherEntreprise, type FicheAnnuaire, INDISPONIBLE } from "./annuaire";
 import { ouvrirEssai } from "./abonnements";
-import { type Compte, creerCompte, normaliserEmail } from "./comptes";
+import { adresseInscrite, type Compte, creerCompte, normaliserEmail } from "./comptes";
 import { profilParIa } from "./ia";
+import { hacherMotDePasse, motDePasseRefuse } from "./motdepasse";
 import {
   enregistrerProfil, historiqueEntreprise, type Profil, profilDepuisHistorique, profilDepuisNaf,
 } from "./profil";
@@ -63,18 +64,25 @@ export async function ficheLocale(sql: postgres.Sql, numero: string): Promise<Fi
   };
 }
 
+export const ADRESSE_DEJA_INSCRITE =
+  "Un compte existe déjà avec cette adresse. Connectez-vous, ou choisissez un mot de passe avec « Mot de passe oublié ».";
+
 /** Crée le compte et son profil de veille. */
 export async function inscrire(
   sql: postgres.Sql,
-  saisie: { identifiant: string; email: string },
+  saisie: { identifiant: string; email: string; motDePasse: string },
   annuaire = chercherEntreprise,
 ): Promise<Inscription> {
-  const email = normaliserEmail(saisie.email);
-  if (!email) return { ok: false, erreur: "Cette adresse électronique n'est pas valable." };
   const numero = saisie.identifiant.replace(/\D/g, "");
   if (numero.length !== 9 && numero.length !== 14) {
     return { ok: false, erreur: "Un SIRET fait 14 chiffres (un SIREN, 9). Il figure sur vos factures." };
   }
+  const email = normaliserEmail(saisie.email);
+  if (!email) return { ok: false, erreur: "Cette adresse électronique n'est pas valable." };
+  const refus = motDePasseRefuse(saisie.motDePasse);
+  if (refus) return { ok: false, erreur: refus };
+  // avant l'annuaire et l'IA, qui prennent plusieurs secondes
+  if (await adresseInscrite(sql, email)) return { ok: false, erreur: ADRESSE_DEJA_INSCRITE };
   let entreprise = await annuaire(numero);
   if (entreprise === INDISPONIBLE) entreprise = await ficheLocale(sql, numero) ?? INDISPONIBLE;
   if (entreprise === INDISPONIBLE) {
@@ -89,7 +97,10 @@ export async function inscrire(
     siren: entreprise.siren,
     siret: entreprise.siret,
     nom: entreprise.nom,
+    motDePasse: await hacherMotDePasse(saisie.motDePasse),
   });
+  // deux inscriptions simultanées avec la même adresse : la seconde s'arrête là
+  if (!compte) return { ok: false, erreur: ADRESSE_DEJA_INSCRITE };
   await enregistrerProfil(sql, compte.id, profil);
   await ouvrirEssai(sql, compte.id);
   return { ok: true, compte, profil, entreprise };

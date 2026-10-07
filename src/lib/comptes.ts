@@ -8,7 +8,7 @@ export type Compte = {
   nom: string | null;
 };
 
-/** Durée d'une session : le client reste connecté un mois sans avoir à redemander un lien. */
+/** Durée d'une session : le client reste connecté un mois sans retaper son mot de passe. */
 const JOURS_SESSION = 30;
 
 export const COOKIE_SESSION = "session";
@@ -24,21 +24,27 @@ export function normaliserEmail(brut: string): string | null {
   return /^[^\s@]+@[^\s@.]+\.[^\s@]{2,}$/.test(email) && email.length <= 254 ? email : null;
 }
 
+/** Vrai si un compte porte déjà cette adresse (normalisée). */
+export async function adresseInscrite(sql: postgres.Sql, email: string): Promise<boolean> {
+  const [ligne] = await sql`select 1 from comptes where email = ${email}`;
+  return ligne !== undefined;
+}
+
 /**
- * Crée le compte, ou met à jour l'entreprise suivie si l'adresse est déjà inscrite : se réinscrire
- * avec un autre SIRET change l'entreprise, cela ne crée pas un second compte.
+ * Crée le compte, ou renvoie null si l'adresse est déjà inscrite : une inscription ne doit jamais
+ * prendre la main sur le compte de quelqu'un d'autre. `motDePasse` est l'empreinte, pas le mot de passe.
  */
 export async function creerCompte(
   sql: postgres.Sql,
-  compte: { email: string; siren: string | null; siret: string | null; nom: string | null },
-): Promise<Compte> {
+  compte: { email: string; siren: string | null; siret: string | null; nom: string | null; motDePasse?: string | null },
+): Promise<Compte | null> {
   const [ligne] = await sql<Compte[]>`
-    insert into comptes (email, siren, siret, nom, jeton)
-    values (${compte.email}, ${compte.siren}, ${compte.siret}, ${compte.nom}, ${jetonAleatoire(16)})
-    on conflict (email) do update set siren = excluded.siren, siret = excluded.siret, nom = excluded.nom,
-      jeton = coalesce(comptes.jeton, excluded.jeton)
+    insert into comptes (email, siren, siret, nom, jeton, mot_de_passe)
+    values (${compte.email}, ${compte.siren}, ${compte.siret}, ${compte.nom}, ${jetonAleatoire(16)},
+      ${compte.motDePasse ?? null})
+    on conflict (email) do nothing
     returning id, email, siren, siret, nom`;
-  return ligne;
+  return ligne ?? null;
 }
 
 /** Ouvre une session et renvoie l'identifiant à déposer dans le cookie. */
@@ -62,6 +68,11 @@ export async function compteDeLaSession(sql: postgres.Sql, session: string | und
 
 export async function fermerSession(sql: postgres.Sql, session: string): Promise<void> {
   await sql`delete from sessions where id = ${session}`;
+}
+
+/** Ferme toutes les sessions du compte, par exemple après un changement de mot de passe. */
+export async function fermerSessions(sql: postgres.Sql, compteId: string): Promise<void> {
+  await sql`delete from sessions where compte_id = ${compteId}`;
 }
 
 /** Jeton de désinscription du compte, créé au besoin (les comptes d'avant les alertes n'en ont pas). */

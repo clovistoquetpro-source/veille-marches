@@ -70,7 +70,7 @@ export default async function PageEntreprise({ params }: Props) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">{nomAffiche(f)}</h1>
         {suivi === null ? (
-          <Link href="/inscription" className="text-sm underline">Être prévenu quand elle gagne un marché</Link>
+          <Link href="/connexion?mode=creer" className="text-sm underline">Être prévenu quand elle gagne un marché</Link>
         ) : !suivi.soiMeme && (
           <BoutonSuivi siren={f.siren} suivie={suivi.suivie} />
         )}

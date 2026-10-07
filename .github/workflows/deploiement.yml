@@ -58,9 +58,11 @@ jobs:
           STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
           STRIPE_PRIX: ${{ secrets.STRIPE_PRIX }}
           STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          # expéditeur des courriels « mot de passe oublié » envoyés par le site (variable GitHub, pas un secret)
+          COURRIEL_ADRESSE: ${{ vars.COURRIEL_ADRESSE }}
         run: |
           node -e '
-            const noms = ["DATABASE_URL", "ANTHROPIC_API_KEY", "BREVO_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_PRIX", "STRIPE_WEBHOOK_SECRET"];
+            const noms = ["DATABASE_URL", "ANTHROPIC_API_KEY", "BREVO_API_KEY", "STRIPE_SECRET_KEY", "STRIPE_PRIX", "STRIPE_WEBHOOK_SECRET", "COURRIEL_ADRESSE"];
             const presents = noms.filter((nom) => process.env[nom]);
             const valeurs = Object.fromEntries(presents.map((nom) => [nom, process.env[nom]]));
             require("node:fs").writeFileSync(process.env.RUNNER_TEMP + "/secrets.json", JSON.stringify(valeurs), { mode: 0o600 });
