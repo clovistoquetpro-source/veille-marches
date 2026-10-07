@@ -32,7 +32,7 @@ export default async function PageAvis({ searchParams }: Props) {
     <main className="mx-auto max-w-6xl p-6">
       <h1 className="text-2xl font-semibold">Avis publiés</h1>
       <p className="mt-1 text-sm text-gray-600">
-        Avis nationaux du BOAMP et avis européens de TED, mis à jour chaque matin. Les rectificatifs sont masqués.
+        Avis nationaux du BOAMP et avis européens de TED, mis à jour toutes les 2 heures en journée. Les rectificatifs sont masqués.
       </p>
 
       <form className="mt-4 flex flex-wrap items-center gap-3 text-sm">

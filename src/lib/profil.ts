@@ -10,7 +10,7 @@ export type Profil = {
   /** Marchés déjà gagnés, déduction par l'IA, ou saisie à la main. */
   origine: "historique" | "ia" | "manuel";
   /** Rythme des alertes par courriel. */
-  frequence?: "quotidienne" | "hebdomadaire" | "aucune";
+  frequence?: "en_continu" | "quotidienne" | "hebdomadaire" | "aucune";
 };
 
 /** Ce que la base sait d'une entreprise avant de lui proposer un profil. */

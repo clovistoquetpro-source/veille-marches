@@ -1,5 +1,6 @@
 /**
- * Alertes par courriel. Chaque matin (ou chaque lundi), on envoie à chaque client les appels
+ * Alertes par courriel. Chaque matin à 7 h (ou chaque lundi, ou après chaque import pour ceux qui
+ * veulent les offres dès qu'elles sortent), on envoie à chaque client les appels
  * d'offres qui viennent de paraître, les marchés qui entrent dans leur fenêtre de relance et ceux
  * que ses concurrents viennent de gagner, sans jamais répéter ce qu'on lui a déjà annoncé.
  */
@@ -12,7 +13,8 @@ import { euros, jour, mois } from "./format";
 import { tableauPg } from "./pg";
 import type { Profil } from "./profil";
 
-export type Frequence = "quotidienne" | "hebdomadaire";
+export const FREQUENCES = ["en_continu", "quotidienne", "hebdomadaire"] as const;
+export type Frequence = (typeof FREQUENCES)[number];
 
 export type Destinataire = {
   compte_id: string;
