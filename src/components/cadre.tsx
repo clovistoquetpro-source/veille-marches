@@ -6,6 +6,7 @@
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Logo } from "@/components/logo";
 import { NOM } from "@/lib/produit";
 
 const PAGES_IMMERSIVES = new Set(["/", "/inscription", "/connexion", "/connexion/nouveau"]);
@@ -18,8 +19,8 @@ export function EnTete() {
   if (immersive(usePathname())) return null;
   return (
     <header className="border-b">
-      <nav className="mx-auto flex max-w-6xl gap-5 px-6 py-3 text-sm">
-        <Link href="/" className="font-semibold">{NOM}</Link>
+      <nav className="mx-auto flex max-w-6xl items-center gap-5 px-6 py-3 text-sm">
+        <Link href="/" className="mr-2 shrink-0" aria-label={`${NOM}, accueil`}><Logo hauteur={24} variante="auto" /></Link>
         <Link href="/avis">Avis publiés</Link>
         <Link href="/renouvellements">Renouvellements</Link>
         <Link href="/veille" className="ml-auto">Ma veille</Link>

@@ -3,7 +3,7 @@
  */
 import type postgres from "postgres";
 import { type Compte, fermerSessions, jetonAleatoire, normaliserEmail } from "./comptes";
-import type { Courriel, Envoyeur } from "./courriel";
+import { type Courriel, type Envoyeur, logoCourriel } from "./courriel";
 import { EMPREINTE_FACTICE, hacherMotDePasse, motDePasseRefuse, verifierMotDePasse } from "./motdepasse";
 import { NOM } from "./produit";
 
@@ -62,7 +62,7 @@ export function courrielReinitialisation(email: string, lien: string): Courriel 
     "Si vous n'avez rien demandé, ignorez ce message : votre mot de passe actuel reste valable.",
   ].join("\n");
   const html = `<div style="font-family:system-ui,sans-serif;max-width:520px;line-height:1.5">` +
-    `<p>Bonjour,</p><p>Pour choisir un nouveau mot de passe sur ${NOM}, ouvrez ce lien dans l'heure :</p>` +
+    logoCourriel(new URL(lien).origin) + `<p>Bonjour,</p><p>Pour choisir un nouveau mot de passe sur ${NOM}, ouvrez ce lien dans l'heure :</p>` +
     `<p><a href="${lien}" style="display:inline-block;background:#0b0b0f;color:#fff;padding:12px 22px;` +
     `border-radius:999px;text-decoration:none">Choisir un nouveau mot de passe</a></p>` +
     `<p style="color:#666;font-size:13px">Si vous n'avez rien demandé, ignorez ce message : votre mot de passe actuel reste valable.</p></div>`;

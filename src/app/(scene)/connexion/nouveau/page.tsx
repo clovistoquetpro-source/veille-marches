@@ -18,8 +18,8 @@ export default async function PageNouveauMotDePasse({ searchParams }: { searchPa
           <FormulaireNouveau jeton={jeton} />
         ) : (
           <>
-            <h1 className="text-[26px] leading-tight font-medium tracking-[-0.02em]">Lien expiré</h1>
-            <p className="mt-1.5 text-sm text-[#a3a3b2]">
+            <h1 className="text-[26px] leading-tight police-titre font-semibold tracking-[-0.02em]">Lien expiré</h1>
+            <p className="mt-1.5 text-sm text-texte-doux">
               Ce lien a déjà servi ou date de plus d&apos;une heure. Demandez-en un nouveau, il arrive en quelques secondes.
             </p>
             <Link href="/connexion?mode=oubli" className="bouton-principal mt-6 flex items-center justify-center">

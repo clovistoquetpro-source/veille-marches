@@ -7,6 +7,7 @@
  * reprennent la forme des vrais (voir src/lib/alertes.ts). Exemples fictifs.
  */
 import { useEffect, useRef, useState } from "react";
+import { SymboleCompact } from "@/components/logo";
 import { NOM } from "@/lib/produit";
 import { quandVisible, useMoinsDAnimations } from "./mouvement";
 
@@ -50,8 +51,8 @@ const DUREE = 5200;
 function Ligne({ titre, detail }: { titre: string; detail: string }) {
   return (
     <li className="mt-3">
-      <span className="text-[13px] font-medium text-[#aab6ff] underline decoration-[#aab6ff]/30 underline-offset-2">{titre}</span>
-      <span className="mt-0.5 block text-[12px] leading-snug text-[#8b8b9a]">{detail}</span>
+      <span className="text-[13px] font-medium text-accent underline decoration-accent/30 underline-offset-2">{titre}</span>
+      <span className="mt-0.5 block text-[12px] leading-snug text-texte-doux">{detail}</span>
     </li>
   );
 }
@@ -69,9 +70,9 @@ function EnTeteCourriel({ sujet, jour }: { sujet: string; jour: string }) {
   return (
     <div className="border-b border-white/[0.07] pb-4">
       <p className="text-[17px] leading-snug font-medium text-white">{sujet}</p>
-      <p className="mt-2 flex items-center gap-2 text-[12px] text-[#8b8b9a]">
-        <span className="logo-radar petit" aria-hidden="true" />
-        <span className="text-[#c9c9d4]">{NOM}</span>
+      <p className="mt-2 flex items-center gap-2 text-[12px] text-texte-doux">
+        <SymboleCompact />
+        <span className="text-texte">{NOM}</span>
         <span>· {jour} 07:00</span>
       </p>
     </div>
@@ -84,13 +85,13 @@ function Lecture({ etape }: { etape: number }) {
     return (
       <>
         <EnTeteCourriel sujet={COURRIELS[0].sujet} jour="lun." />
-        <p className="mt-4 text-[13px] text-[#c9c9d4]">Bonjour, voici ce qui concerne votre entreprise :</p>
+        <p className="mt-4 text-[13px] text-texte">Bonjour, voici ce qui concerne votre entreprise :</p>
         <Rubrique titre="Appels d'offres qui viennent de paraître">
           <Ligne titre="Nettoyage des locaux de la mairie" detail="Ville de Montval · dép. 35 · réponse avant le 14 nov." />
           <Ligne titre="Entretien des vitres des écoles" detail="Ville de Belrive · dép. 44 · réponse avant le 21 nov." />
           <Ligne titre="Nettoyage du centre aquatique" detail="Communauté de communes du Val · dép. 35 · réponse avant le 2 déc." />
         </Rubrique>
-        <p className="mt-4 text-[12px] text-[#8b8b9a]">Et 1 autre dans votre veille.</p>
+        <p className="mt-4 text-[12px] text-texte-doux">Et 1 autre dans votre veille.</p>
       </>
     );
   }
@@ -99,15 +100,15 @@ function Lecture({ etape }: { etape: number }) {
       <>
         <EnTeteCourriel sujet={COURRIELS[1].sujet} jour="mar." />
         <Rubrique titre="Marchés qui arrivent à échéance dans 6 à 12 mois">
-          <li className="mt-3 rounded-2xl border border-[#be9fff]/25 bg-[#be9fff]/[0.07] p-3.5">
+          <li className="mt-3 rounded-2xl border border-accent-2/25 bg-accent-2/[0.07] p-3.5">
             <span className="flex items-center justify-between gap-3">
               <span className="text-[13px] font-medium text-white">Nettoyage des bâtiments communautaires</span>
-              <span className="shrink-0 rounded-full bg-[#be9fff]/15 px-2.5 py-1 text-[11px] font-medium text-[#d9c8ff]">relance dans 8 mois</span>
+              <span className="shrink-0 rounded-full bg-accent-2/15 px-2.5 py-1 text-[11px] font-medium text-accent-2">relance dans 8 mois</span>
             </span>
-            <span className="mt-1.5 block text-[12px] leading-snug text-[#a3a3b2]">
+            <span className="mt-1.5 block text-[12px] leading-snug text-texte-doux">
               Fin estimée juin 2027 · Agglomération de Belrive · 3 lots · 410 000 € au total · titulaire actuel : Propreté Ouest
             </span>
-            <span className="mt-2.5 inline-block text-[12px] font-medium text-[#d9c8ff]">Voir la fiche de l&apos;acheteur →</span>
+            <span className="mt-2.5 inline-block text-[12px] font-medium text-accent-2">Voir la fiche de l&apos;acheteur →</span>
           </li>
         </Rubrique>
         <Rubrique titre="Appels d'offres qui viennent de paraître">
@@ -124,13 +125,13 @@ function Lecture({ etape }: { etape: number }) {
         <Rubrique titre="Ce que vos concurrents viennent de gagner">
           <li className="mt-3 rounded-2xl border border-[#ffaacd]/25 bg-[#ffaacd]/[0.06] p-3.5">
             <span className="text-[13px] font-medium text-white">Netéo Services : nettoyage des écoles maternelles</span>
-            <span className="mt-1.5 block text-[12px] leading-snug text-[#a3a3b2]">
+            <span className="mt-1.5 block text-[12px] leading-snug text-texte-doux">
               Attribution publiée le 6 oct. · Ville de Montval · 120 000 €
             </span>
             <span className="mt-2.5 block text-[12px] text-[#ffc6dc]">Ce marché reviendra en jeu vers octobre 2029.</span>
           </li>
         </Rubrique>
-        <p className="mt-5 text-[12px] leading-relaxed text-[#8b8b9a]">
+        <p className="mt-5 text-[12px] leading-relaxed text-texte-doux">
           Vous suivez 3 concurrents. Leur fiche montre tout ce qu&apos;ils ont gagné, chez qui, et quand ces marchés reviennent.
         </p>
       </>
@@ -144,20 +145,20 @@ function Lecture({ etape }: { etape: number }) {
   ];
   return (
     <>
-      <p className="text-[11px] tracking-wide text-[#8b8b9a] uppercase">Fiche acheteur · ouverte depuis l&apos;alerte de mardi</p>
+      <p className="text-[11px] tracking-wide text-texte-doux uppercase">Fiche acheteur · ouverte depuis l&apos;alerte de mardi</p>
       <p className="mt-2 text-[17px] font-medium text-white">Agglomération de Belrive</p>
       <div className="mt-4 grid grid-cols-3 gap-2">
         {[["38", "marchés en 3 ans"], ["4,2 M€", "attribués"], ["3 ans", "entre deux appels"]].map(([chiffre, legende]) => (
           <span key={legende} className="rounded-xl bg-white/[0.04] px-3 py-2.5">
             <span className="block text-[15px] font-semibold text-white">{chiffre}</span>
-            <span className="block text-[11px] leading-tight text-[#8b8b9a]">{legende}</span>
+            <span className="block text-[11px] leading-tight text-texte-doux">{legende}</span>
           </span>
         ))}
       </div>
       <p className="mt-5 text-[13px] font-semibold text-white">Ce qu&apos;elle achète</p>
       <ul className="mt-2 space-y-2">
         {achats.map((a, i) => (
-          <li key={a.nom} className="grid grid-cols-[92px_1fr_34px] items-center gap-2 text-[12px] text-[#a3a3b2]">
+          <li key={a.nom} className="grid grid-cols-[92px_1fr_34px] items-center gap-2 text-[12px] text-texte-doux">
             {a.nom}
             <span className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]">
               <span className="barre-fiche block h-full rounded-full bg-[#6ecdff]" style={{ width: `${a.part * 2.5}%`, animationDelay: `${i * 90}ms` }} />
@@ -167,7 +168,7 @@ function Lecture({ etape }: { etape: number }) {
         ))}
       </ul>
       <p className="mt-5 text-[13px] font-semibold text-white">À qui</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-[#a3a3b2]">Propreté Ouest (5 marchés) · Netéo Services (3) · Clair Net (2)</p>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-texte-doux">Propreté Ouest (5 marchés) · Netéo Services (3) · Clair Net (2)</p>
     </>
   );
 }
@@ -231,14 +232,14 @@ export function BoiteMail() {
               </span>
               <span className="depliant ouvert-si-actif">
                 <span className="block">
-                  <span className="mt-2 block text-[14px] leading-relaxed text-[#a3a3b2]">{f.texte}</span>
+                  <span className="mt-2 block text-[14px] leading-relaxed text-texte-doux">{f.texte}</span>
                   <span className="mt-3 grid grid-cols-2 gap-2 text-[12px] leading-snug">
-                    <span className="rounded-xl bg-white/[0.03] px-3 py-2 text-[#8b8b9a]">
+                    <span className="rounded-xl bg-white/[0.03] px-3 py-2 text-texte-doux">
                       <span className="block text-[10px] tracking-wider uppercase">Avant</span>
                       {f.avant}
                     </span>
-                    <span className="rounded-xl bg-[#8b9bff]/10 px-3 py-2 text-[#d4d9ff]">
-                      <span className="block text-[10px] tracking-wider text-[#aab6ff] uppercase">Avec nous</span>
+                    <span className="rounded-xl bg-accent/10 px-3 py-2 text-reflet">
+                      <span className="block text-[10px] tracking-wider text-accent uppercase">Avec nous</span>
                       {f.apres}
                     </span>
                   </span>
@@ -259,21 +260,21 @@ export function BoiteMail() {
           <span className="size-2.5 rounded-full bg-white/15" />
           <span className="size-2.5 rounded-full bg-white/15" />
           <span className="size-2.5 rounded-full bg-white/15" />
-          <span className="ml-3 text-[12px] text-[#8b8b9a]">Messagerie</span>
+          <span className="ml-3 text-[12px] text-texte-doux">Messagerie</span>
         </div>
 
         <div className="grid md:h-[480px] md:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[150px_230px_minmax(0,1fr)]">
           <div className="hidden border-r border-white/[0.07] p-3 text-[13px] xl:block">
             <p className="flex items-center justify-between rounded-lg bg-white/[0.06] px-2.5 py-2 text-white">
               Réception
-              {nonLus > 0 && <span className="rounded-full bg-[#8b9bff] px-1.5 text-[11px] font-semibold text-[#0b0b0f]">{nonLus}</span>}
+              {nonLus > 0 && <span className="rounded-full bg-accent px-1.5 text-[11px] font-semibold text-fond">{nonLus}</span>}
             </p>
-            <p className="px-2.5 py-2 text-[#8b8b9a]">Suivis</p>
-            <p className="px-2.5 py-2 text-[#8b8b9a]">Envoyés</p>
+            <p className="px-2.5 py-2 text-texte-doux">Suivis</p>
+            <p className="px-2.5 py-2 text-texte-doux">Envoyés</p>
           </div>
 
           <ul className="border-b border-white/[0.07] md:overflow-hidden md:border-r md:border-b-0">
-            {arrives === 0 && <li className="px-4 py-6 text-[13px] text-[#6b6b7a]">Aucun nouveau message</li>}
+            {arrives === 0 && <li className="px-4 py-6 text-[13px] text-texte-doux">Aucun nouveau message</li>}
             {COURRIELS.slice(0, arrives).map((c, i) => ({ c, i })).reverse().map(({ c, i }) => (
               <li key={c.sujet} className="arrivee">
                 <button
@@ -281,14 +282,14 @@ export function BoiteMail() {
                   className={`courriel w-full px-4 py-3 text-left ${affiche === i ? "ouvert" : ""}`}
                 >
                   <span className="flex items-center justify-between gap-2 text-[12px]">
-                    <span className={`flex items-center gap-1.5 ${lus.includes(i) ? "text-[#a3a3b2]" : "font-semibold text-white"}`}>
-                      {!lus.includes(i) && <span className="size-1.5 rounded-full bg-[#8b9bff]" />}
+                    <span className={`flex items-center gap-1.5 ${lus.includes(i) ? "text-texte-doux" : "font-semibold text-white"}`}>
+                      {!lus.includes(i) && <span className="size-1.5 rounded-full bg-accent" />}
                       {NOM}
                     </span>
-                    <span className="text-[#6b6b7a]">{c.jour}</span>
+                    <span className="text-texte-doux">{c.jour}</span>
                   </span>
-                  <span className={`mt-1 block truncate text-[13px] ${lus.includes(i) ? "text-[#c9c9d4]" : "font-medium text-white"}`}>{c.sujet}</span>
-                  <span className="mt-0.5 block truncate text-[12px] text-[#6b6b7a]">{c.apercu}</span>
+                  <span className={`mt-1 block truncate text-[13px] ${lus.includes(i) ? "text-texte" : "font-medium text-white"}`}>{c.sujet}</span>
+                  <span className="mt-0.5 block truncate text-[12px] text-texte-doux">{c.apercu}</span>
                 </button>
               </li>
             ))}
@@ -300,7 +301,7 @@ export function BoiteMail() {
                 <Lecture etape={etape} />
               </div>
             ) : (
-              <p className="text-[13px] text-[#6b6b7a]">Votre première alerte arrive demain matin.</p>
+              <p className="text-[13px] text-texte-doux">Votre première alerte arrive demain matin.</p>
             )}
           </div>
         </div>
@@ -308,9 +309,9 @@ export function BoiteMail() {
         <div className={`annonce ${annonce?.visible ? "visible" : ""}`} aria-live="polite">
           {annonce && (
             <>
-              <span className="logo-radar petit" aria-hidden="true" />
+              <SymboleCompact />
               <span className="min-w-0">
-                <span className="block text-[11px] text-[#8b8b9a]">Nouveau message · {NOM}</span>
+                <span className="block text-[11px] text-texte-doux">Nouveau message · {NOM}</span>
                 <span className="block truncate text-[13px] font-medium text-white">{COURRIELS[annonce.courriel].sujet}</span>
               </span>
             </>

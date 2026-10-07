@@ -31,19 +31,21 @@
       #0b0b0f;
   }
 
+  /* étiquette de la charte : Manrope en capitales espacées, en pervenche */
   .surtitre {
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.16em;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: #aab6ff;
+    color: #8b9bff;
   }
   .titre-section {
     font-size: clamp(34px, 4.6vw, 60px);
     line-height: 1.05;
-    font-weight: 500;
-    letter-spacing: -0.04em;
+    font-weight: 600;
+    letter-spacing: -0.035em;
   }
   .degrade {
     background: linear-gradient(100deg, #fff 5%, #c8d0ff 45%, #a493ff 95%);
@@ -141,28 +143,6 @@
     border-color: rgb(255 255 255 / 0.08);
     backdrop-filter: blur(18px) saturate(140%);
     -webkit-backdrop-filter: blur(18px) saturate(140%);
-  }
-  /* petit radar qui tourne : le logo provisoire */
-  .logo-radar {
-    display: inline-block;
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    border: 1px solid rgb(200 208 255 / 0.5);
-    background:
-      radial-gradient(circle, #fff 0 1.5px, transparent 2px),
-      conic-gradient(from 0deg, rgb(200 208 255 / 0) 0 250deg, rgb(200 208 255 / 0.85) 360deg);
-    animation: tourne 4s linear infinite;
-  }
-  .logo-radar.petit {
-    width: 14px;
-    height: 14px;
-  }
-  @keyframes tourne {
-    to {
-      transform: rotate(1turn);
-    }
   }
 
   /* ---------- bouton « Label Slide » ---------- */
@@ -371,7 +351,7 @@
     text-align: center;
   }
   .scan-texte > span.brouillee {
-    color: #aab6ff;
+    color: #8b9bff;
     text-shadow: -1.5px 0 rgb(255 80 140 / 0.75), 1.5px 0 rgb(80 200 255 / 0.75);
   }
 
@@ -435,18 +415,25 @@
     border-style: dashed;
     border-color: rgb(200 208 255 / 0.07);
   }
-  .radar-anneaux > .radar-balayage {
+  /* ondes du sonar, comme le symbole de la marque : un cercle part du centre, s'élargit et s'efface */
+  .radar-anneaux > .sonar-onde {
     width: 140%;
     height: 140%;
-    border: 0;
-    background: conic-gradient(from 0deg, rgb(139 155 255 / 0) 0 290deg, rgb(139 155 255 / 0.11) 360deg);
-    mask-image: radial-gradient(closest-side, transparent 40%, #000 62%, #000 86%, transparent 100%);
-    -webkit-mask-image: radial-gradient(closest-side, transparent 40%, #000 62%, #000 86%, transparent 100%);
-    animation: balayer 7s linear infinite;
+    border: 1.5px solid rgb(139 155 255 / 0.32);
+    opacity: 0;
+    animation: onde 6s var(--doux) infinite;
   }
-  @keyframes balayer {
+  .radar-anneaux > .sonar-onde + .sonar-onde {
+    animation-delay: 3s;
+  }
+  @keyframes onde {
+    from {
+      transform: translate(-50%, -50%) scale(0.18);
+      opacity: 0.9;
+    }
     to {
-      transform: translate(-50%, -50%) rotate(1turn);
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0;
     }
   }
   .radar-points {
@@ -461,7 +448,7 @@
     height: 7px;
     margin: -3.5px;
     border-radius: 50%;
-    background: #dfe3ff;
+    background: #c8d0ff;
     box-shadow: 0 0 12px 2px rgb(139 155 255 / 0.6);
     opacity: var(--vu);
     transform: scale(calc(0.3 + var(--vu) * 0.7));
@@ -498,7 +485,7 @@
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     font-size: 12px;
-    color: #d8d8e2;
+    color: #f4f4f6;
     white-space: nowrap;
   }
   .radar-points li > span.a-gauche {
@@ -540,20 +527,20 @@
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     font-size: 12px;
-    color: #c9c9d4;
+    color: #f4f4f6;
   }
   .pastille-info::before {
     content: "";
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: #aab6ff;
+    background: #8b9bff;
     box-shadow: 0 0 0 3px rgb(170 182 255 / 0.2);
   }
   .titre-vitrine {
     font-size: clamp(36px, min(6.4vw, 9svh), 96px);
     line-height: 1.02;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.04em;
   }
   .lettre {
@@ -591,11 +578,11 @@
     align-items: center;
     gap: 10px;
     transform: translateX(-50%);
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
-    font-size: 10.5px;
+    font-size: 11px;
+    font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: #8b8b9a;
+    color: #a3a3b2;
     opacity: calc(1 - var(--p) * 6);
   }
   .indice-defilement::after {
@@ -626,7 +613,7 @@
     opacity: clamp(0.14, calc(var(--p) * var(--n) * 1.6 - var(--i)), 1);
   }
   .mot.fort {
-    color: #b8c1ff;
+    color: #c8d0ff;
   }
   .probleme-suite {
     --vu: clamp(0, calc((var(--p) - 0.62) * 5), 1);
@@ -726,13 +713,14 @@
     border-color: rgb(255 255 255 / 0.08);
   }
   .fonction-numero {
-    font-family: var(--font-geist-mono), ui-monospace, monospace;
     font-size: 12px;
-    color: #6b6b7a;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: #a3a3b2;
     transition: color 0.5s var(--doux);
   }
   .fonction[data-actif="oui"] .fonction-numero {
-    color: #aab6ff;
+    color: #8b9bff;
   }
   .fonction .depliant > span {
     min-height: 0;
@@ -866,9 +854,10 @@
     }
   }
   .chiffre-gain {
+    font-family: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
     font-size: clamp(44px, 5.4vw, 72px);
     line-height: 1;
-    font-weight: 500;
+    font-weight: 600;
     letter-spacing: -0.045em;
     background: linear-gradient(100deg, #fff 20%, #c8d0ff 60%, #a493ff);
     -webkit-background-clip: text;
@@ -967,8 +956,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .lettre,
-    .logo-radar,
-    .radar-balayage,
+    .sonar-onde,
     .radar-points li::after,
     .indice-defilement::after,
     .bandeau-rang,

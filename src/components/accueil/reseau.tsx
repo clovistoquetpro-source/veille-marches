@@ -14,7 +14,7 @@ type Rgb = [number, number, number];
 /** Les quatre grandes branches, de gauche à droite. Les exemples sont fictifs. */
 export const FAMILLES: { nom: string; couleur: Rgb; exemples: [string, string] }[] = [
   { nom: "Appels d'offres du jour", couleur: [139, 155, 255], exemples: ["Nettoyage de locaux · 84 k€", "Maintenance informatique · 210 k€"] },
-  { nom: "Marchés qui reviennent", couleur: [190, 160, 255], exemples: ["Revient dans 8 mois · une mairie", "Revient dans 11 mois · un hôpital"] },
+  { nom: "Marchés qui reviennent", couleur: [164, 147, 255], exemples: ["Revient dans 8 mois · une mairie", "Revient dans 11 mois · un hôpital"] },
   { nom: "Acheteurs à rencontrer", couleur: [110, 205, 255], exemples: ["Une région · 14 achats par an", "Un lycée · rachète tous les 3 ans"] },
   { nom: "Concurrents à suivre", couleur: [255, 170, 205], exemples: ["Un concurrent gagne · 120 k€", "Nouveau titulaire · un département"] },
 ];
@@ -290,7 +290,7 @@ export function Reseau() {
         ctx.fillStyle = rgba(teinte, 1);
         ctx.fill();
       }
-      ctx.fillStyle = forte ? "#fff" : "#d8d8e2";
+      ctx.fillStyle = forte ? "#fff" : "#f4f4f6";
       ctx.textBaseline = "middle";
       ctx.fillText(texte, gauche + (forte ? 12 : 21), y + 0.5);
       ctx.globalAlpha = 1;
@@ -518,8 +518,8 @@ export function Reseau() {
           <div className="grid">
             {ETAPES.map((e, i) => (
               <div key={e.titre} className="reseau-etape" data-actif={i === etape ? "oui" : "non"}>
-                <h3 className="text-[26px] leading-[1.1] font-medium tracking-[-0.03em] sm:text-[40px]">{e.titre}</h3>
-                <p className="mt-3 text-[15px] leading-relaxed text-[#a3a3b2] sm:mt-4 sm:text-base">{e.texte}</p>
+                <h3 className="text-[26px] leading-[1.1] police-titre font-semibold tracking-[-0.03em] sm:text-[40px]">{e.titre}</h3>
+                <p className="mt-3 text-[15px] leading-relaxed text-texte-doux sm:mt-4 sm:text-base">{e.texte}</p>
               </div>
             ))}
           </div>

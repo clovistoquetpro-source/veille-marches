@@ -7,7 +7,7 @@
 import type postgres from "postgres";
 import { jetonDeDesinscription } from "./comptes";
 import { type Gain, gainsDesConcurrents } from "./concurrents";
-import { type Courriel, type Envoyeur } from "./courriel";
+import { type Courriel, type Envoyeur, logoCourriel } from "./courriel";
 import { criteresProfil, profilVide } from "./correspondance";
 import { euros, jour, mois } from "./format";
 import { tableauPg } from "./pg";
@@ -226,7 +226,7 @@ export function composerAlerte(
       `<li style="margin-bottom:10px"><a href="${echappe(l.lien)}">${echappe(l.titre)}</a>` +
       `<br><span style="color:#555;font-size:13px">${echappe(l.detail)}</span></li>`).join("")}</ul>`;
 
-  const html = `<div style="font-family:system-ui,sans-serif;max-width:640px">` +
+  const html = `<div style="font-family:system-ui,sans-serif;max-width:640px">` + logoCourriel(site) +
     `<p>Bonjour,</p><p>Voici ce qui concerne ${echappe(destinataire.nom ?? "votre entreprise")} :</p>` +
     sectionHtml("Appels d'offres qui viennent de paraître", lignesAvis) +
     sectionHtml("Marchés qui arrivent à échéance dans 6 à 12 mois", lignesMarches) +

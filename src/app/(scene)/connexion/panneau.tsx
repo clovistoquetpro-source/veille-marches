@@ -14,8 +14,8 @@ export type Mode = "connexion" | "creer" | "oubli";
 function Titre({ titre, texte }: { titre: string; texte: string }) {
   return (
     <div className="mb-5">
-      <h1 className="text-[26px] leading-tight font-medium tracking-[-0.02em]">{titre}</h1>
-      <p className="mt-1.5 text-sm text-[#a3a3b2]">{texte}</p>
+      <h1 className="text-[26px] leading-tight police-titre font-semibold tracking-[-0.02em]">{titre}</h1>
+      <p className="mt-1.5 text-sm text-texte-doux">{texte}</p>
     </div>
   );
 }
@@ -76,7 +76,7 @@ export function Panneau({ modeInitial }: { modeInitial: Mode }) {
             <ChampEmail email={email} setEmail={setEmail} />
             <ChampMotDePasse etiquette="Mot de passe" />
             <div className="mt-3 text-right">
-              <button type="button" onClick={() => choisir("oubli")} className="lien-souligne text-[13px] text-[#a3a3b2]">
+              <button type="button" onClick={() => choisir("oubli")} className="lien-souligne text-[13px] text-texte-doux">
                 Mot de passe oublié ?
               </button>
             </div>
@@ -91,7 +91,7 @@ export function Panneau({ modeInitial }: { modeInitial: Mode }) {
             <label className="block">
               <span className="flex items-baseline justify-between gap-3">
                 <Etiquette>SIRET de votre entreprise</Etiquette>
-                <span className="text-xs text-[#8b8b9a]">sur vos factures</span>
+                <span className="text-xs text-texte-doux">sur vos factures</span>
               </span>
               <input
                 name="siret" required inputMode="numeric" autoComplete="off" placeholder="482 818 523 00029"
@@ -104,7 +104,7 @@ export function Panneau({ modeInitial }: { modeInitial: Mode }) {
             <ChampMotDePasse nouveau etiquette="Mot de passe" />
             <Retour erreur={etatCreation.erreur} />
             <BoutonEnvoi enCours={creationEnCours} attente="Nous préparons votre veille…">Créer mon compte</BoutonEnvoi>
-            <p className="mt-3 text-center text-xs text-[#8b8b9a]">Essai gratuit, aucun paiement à l&apos;inscription.</p>
+            <p className="mt-3 text-center text-xs text-texte-doux">Essai gratuit, aucun paiement à l&apos;inscription.</p>
           </form>
         </div>
 
@@ -115,7 +115,7 @@ export function Panneau({ modeInitial }: { modeInitial: Mode }) {
             <Retour erreur={etatOubli.erreur} message={etatOubli.message} />
             <BoutonEnvoi enCours={oubliEnCours} attente="Envoi…">Recevoir le lien</BoutonEnvoi>
             <div className="mt-4 text-center">
-              <button type="button" onClick={() => choisir("connexion")} className="lien-souligne text-[13px] text-[#a3a3b2]">
+              <button type="button" onClick={() => choisir("connexion")} className="lien-souligne text-[13px] text-texte-doux">
                 Retour à la connexion
               </button>
             </div>
