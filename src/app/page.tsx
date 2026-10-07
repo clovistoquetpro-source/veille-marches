@@ -11,6 +11,7 @@ import { Compteur } from "@/components/accueil/compteur";
 import { Curseur } from "@/components/accueil/curseur";
 import { Apparait, SectionCollante } from "@/components/accueil/defilement";
 import { Navigation } from "@/components/accueil/navigation";
+import { OuvertureEnHaut, SCRIPT_OUVERTURE } from "@/components/accueil/ouverture";
 import { Questions } from "@/components/accueil/questions";
 import { Reseau } from "@/components/accueil/reseau";
 import { SphereLiquide } from "@/components/sphere-liquide";
@@ -150,7 +151,7 @@ const QUESTIONS = [
 
 function Coche() {
   return (
-    <svg viewBox="0 0 16 16" className="mt-0.5 size-4 shrink-0 text-[#aab6ff]" aria-hidden="true">
+    <svg viewBox="0 0 16 16" className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden="true">
       <path d="m3.5 8.5 3 3 6-7" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -161,6 +162,8 @@ export default function Accueil() {
     <div className={`${manrope.className} vitrine`}>
       {/* sans JavaScript, tout s'affiche d'emblée */}
       <noscript dangerouslySetInnerHTML={{ __html: "<style>.entree,.mot{opacity:1!important;transform:none!important;filter:none!important}</style>" }} />
+      <script dangerouslySetInnerHTML={{ __html: SCRIPT_OUVERTURE }} />
+      <OuvertureEnHaut />
       <Curseur />
       <Navigation />
 
@@ -171,7 +174,8 @@ export default function Accueil() {
               <span />
               <span />
               <span />
-              <span className="radar-balayage" />
+              <span className="sonar-onde" />
+              <span className="sonar-onde" />
             </div>
             <div className="sphere-cadre heros-sphere pointer-events-none">
               <SphereLiquide className="pointer-events-auto" amplitude={60} ondulations={70} reflet="#C8D0FF" />
@@ -202,9 +206,9 @@ export default function Accueil() {
                 <h1 className="titre-vitrine sur-sphere mt-5" aria-label="Les marchés publics, avant tout le monde.">
                   <Lettres texte="Les marchés publics," />
                   <br />
-                  <Lettres texte="avant tout le monde." decalage={20} teintes={["#e4e7ff", "#a493ff"]} />
+                  <Lettres texte="avant tout le monde." decalage={20} teintes={["#c8d0ff", "#a493ff"]} />
                 </h1>
-                <p className="apparition sur-sphere mx-auto mt-[clamp(12px,2svh,20px)] max-w-lg text-[15px] leading-relaxed text-[#b4b4c2] sm:text-base" style={{ animationDelay: "700ms" }}>
+                <p className="apparition sur-sphere mx-auto mt-[clamp(12px,2svh,20px)] max-w-lg text-[15px] leading-relaxed text-texte-doux sm:text-base" style={{ animationDelay: "700ms" }}>
                   Chaque matin, les appels d&apos;offres faits pour vous. Six à douze mois avant, les marchés qui
                   vont revenir. Il suffit de votre SIRET.
                 </p>
@@ -213,16 +217,16 @@ export default function Accueil() {
                 <BoutonGlisse href="/connexion?mode=creer">Créer mon compte gratuit</BoutonGlisse>
                 <BoutonScan href="#reseau">Voir comment ça marche</BoutonScan>
               </div>
-              <p className="apparition sur-sphere self-start pt-6 text-center text-xs text-[#a3a3b2]" style={{ animationDelay: "1000ms" }}>
+              <p className="apparition sur-sphere self-start pt-6 text-center text-xs text-texte-doux" style={{ animationDelay: "1000ms" }}>
                 {JOURS_ESSAI} jours gratuits · sans carte bancaire · puis {PRIX_MENSUEL} € HT par mois
               </p>
             </div>
 
             <div className="heros-suite" aria-hidden="true">
-              <p className="text-[clamp(44px,9vw,120px)] leading-none font-medium tracking-[-0.045em] tabular-nums">
+              <p className="text-[clamp(44px,9vw,120px)] leading-none police-titre font-semibold tracking-[-0.045em] tabular-nums">
                 {new Intl.NumberFormat("fr-FR").format(MARCHES)}
               </p>
-              <p className="mt-4 text-lg text-[#c9c9d4] sm:text-xl">marchés publics passés au radar, et chaque avis du jour.</p>
+              <p className="mt-4 text-lg text-texte sm:text-xl">marchés publics passés au radar, et chaque avis du jour.</p>
             </div>
 
             <p className="indice-defilement" aria-hidden="true">Faites défiler</p>
@@ -233,7 +237,7 @@ export default function Accueil() {
       <SectionCollante hauteur="170svh" interieur="grid place-items-center px-6">
         <div className="mx-auto max-w-5xl">
           <p className="surtitre">Le problème</p>
-          <p className="mt-6 text-[clamp(28px,4.4vw,58px)] leading-[1.12] font-medium tracking-[-0.035em]">
+          <p className="mt-6 text-[clamp(28px,4.4vw,58px)] leading-[1.12] police-titre font-semibold tracking-[-0.035em]">
             <Mots
               morceaux={[
                 { texte: "Quand un appel d'offres paraît, il reste souvent" },
@@ -243,7 +247,7 @@ export default function Accueil() {
               ]}
             />
           </p>
-          <p className="probleme-suite mt-8 max-w-2xl text-[17px] leading-relaxed text-[#a3a3b2]">
+          <p className="probleme-suite mt-8 max-w-2xl text-[17px] leading-relaxed text-texte-doux">
             Chaque marché attribué a une date de fin. C&apos;est public, mais personne ne vous la met sous les yeux.
             Nous, si.
           </p>
@@ -257,13 +261,13 @@ export default function Accueil() {
           <Apparait className="mx-auto max-w-2xl text-center">
             <p className="surtitre">Vos alertes</p>
             <h2 className="titre-section mt-4">Tout arrive dans votre boîte mail.</h2>
-            <p className="mt-5 text-[17px] leading-relaxed text-[#a3a3b2]">
+            <p className="mt-5 text-[17px] leading-relaxed text-texte-doux">
               Pas de nouveau logiciel à ouvrir : un courriel le matin, quand il y a du nouveau pour vous. Regardez-les arriver.
             </p>
           </Apparait>
           <Apparait className="mt-14" delai={120}>
             <BoiteMail />
-            <p className="mt-4 text-center text-xs text-[#6b6b7a]">Exemple d&apos;une entreprise de nettoyage. Acheteurs, entreprises et montants fictifs.</p>
+            <p className="mt-4 text-center text-xs text-texte-doux">Exemple d&apos;une entreprise de nettoyage. Acheteurs, entreprises et montants fictifs.</p>
           </Apparait>
         </div>
       </section>
@@ -279,13 +283,13 @@ export default function Accueil() {
               <Apparait key={g.chiffre} delai={i * 90} className="carte-gain">
                 <p className="chiffre-gain">{g.chiffre}</p>
                 <p className="mt-2 text-[17px] font-medium text-white">{g.titre}</p>
-                <p className="mt-3 text-[15px] leading-relaxed text-[#a3a3b2]">{g.texte}</p>
+                <p className="mt-3 text-[15px] leading-relaxed text-texte-doux">{g.texte}</p>
               </Apparait>
             ))}
             <Apparait delai={270} className="carte-gain carte-gain-forte">
               <p className="chiffre-gain"><Compteur valeur={MARCHES} /></p>
               <p className="mt-2 text-[17px] font-medium text-white">marchés analysés pour trouver les vôtres</p>
-              <p className="mt-3 text-[15px] leading-relaxed text-[#a3a3b2]">
+              <p className="mt-3 text-[15px] leading-relaxed text-texte-doux">
                 Et <Compteur valeur={ENTREPRISES} /> entreprises : ce qu&apos;elles gagnent, chez qui, à quel prix.
                 Chaque acheteur et chaque concurrent a sa fiche.
               </p>
@@ -313,11 +317,11 @@ export default function Accueil() {
         </Apparait>
         <Apparait className="carte-tarif mx-auto mt-12 max-w-xl" delai={120}>
           <p className="flex items-end gap-2">
-            <span className="text-[64px] leading-none font-medium tracking-[-0.04em]">{PRIX_MENSUEL} €</span>
-            <span className="pb-2 text-[15px] text-[#a3a3b2]">HT par mois, sans engagement</span>
+            <span className="text-[64px] leading-none police-titre font-semibold tracking-[-0.04em]">{PRIX_MENSUEL} €</span>
+            <span className="pb-2 text-[15px] text-texte-doux">HT par mois, sans engagement</span>
           </p>
-          <p className="mt-3 text-[15px] text-[#a3a3b2]">Pour les premières entreprises inscrites.</p>
-          <ul className="mt-7 space-y-3 text-[15px] text-[#d8d8e2]">
+          <p className="mt-3 text-[15px] text-texte-doux">Pour les premières entreprises inscrites.</p>
+          <ul className="mt-7 space-y-3 text-[15px] text-texte">
             {INCLUS.map((ligne) => (
               <li key={ligne} className="flex gap-3"><Coche />{ligne}</li>
             ))}
@@ -345,10 +349,10 @@ export default function Accueil() {
           <span />
         </div>
         <Apparait className="relative mx-auto max-w-3xl">
-          <h2 className="text-[clamp(36px,6vw,76px)] leading-[1.04] font-medium tracking-[-0.04em]">
+          <h2 className="text-[clamp(36px,6vw,76px)] leading-[1.04] police-titre font-semibold tracking-[-0.04em]">
             Votre prochain marché est peut-être <span className="degrade whitespace-nowrap">déjà publié.</span>
           </h2>
-          <p className="mx-auto mt-6 max-w-lg text-[17px] leading-relaxed text-[#a3a3b2]">
+          <p className="mx-auto mt-6 max-w-lg text-[17px] leading-relaxed text-texte-doux">
             Donnez votre SIRET : votre veille est prête en une minute, et l&apos;essai dure {JOURS_ESSAI} jours.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -359,9 +363,9 @@ export default function Accueil() {
       </section>
 
       <footer className="border-t border-white/[0.07] px-5 py-10">
-        <div className="mx-auto flex max-w-6xl flex-col gap-6 text-xs text-[#8b8b9a] md:flex-row md:items-center md:justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col gap-6 text-xs text-texte-doux md:flex-row md:items-center md:justify-between">
           <p>
-            <span className="font-semibold text-[#c9c9d4]">{NOM}</span>
+            <span className="font-semibold text-texte">{NOM}</span>
             <span className="mt-1 block">Données publiques : BOAMP, TED et données essentielles de la commande publique.</span>
           </p>
           <nav className="flex flex-wrap gap-x-6 gap-y-2">

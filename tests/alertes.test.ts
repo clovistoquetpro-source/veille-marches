@@ -37,6 +37,7 @@ describe("courriel d'alerte", () => {
     expect(courriel.texte).toContain("https://exemple.fr/acheteurs/21690123100011");
     expect(courriel.texte).toContain("https://exemple.fr/desinscription?jeton=abc123");
     expect(courriel.html).toContain('<a href="https://www.boamp.fr/pages/avis/?q=idweb:26-1">Nettoyage des écoles</a>');
+    expect(courriel.html).toContain('<img src="https://exemple.fr/logo/sonar-public-logo-clair.png" width="168" height="32" alt="Sonar Public"');
   });
 
   it("regroupe les lots d'un même marché en une ligne", () => {

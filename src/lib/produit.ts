@@ -3,8 +3,8 @@
  * Les mentions légales et les conditions d'utilisation lisent ces mêmes valeurs.
  */
 
-/** Nom commercial. Nom de travail tant que le nom définitif n'est pas arrêté. */
-export const NOM = "Radar des marchés publics";
+/** Nom commercial. Le logo et les icônes sont dans public/logo et src/app (icon.svg, apple-icon.png). */
+export const NOM = "Sonar Public";
 
 export const BASELINE = "Les marchés publics de l'an prochain, dès aujourd'hui.";
 

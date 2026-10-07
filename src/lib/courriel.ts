@@ -3,6 +3,7 @@
  * tests, on en passe une autre qui écrit dans la console ou garde les messages en mémoire.
  */
 import { fetchAvecReprises } from "../ingest/telechargement";
+import { NOM } from "./produit";
 
 export type Courriel = {
   a: string;
@@ -15,10 +16,19 @@ export type Envoyeur = (courriel: Courriel) => Promise<void>;
 
 const BREVO = "https://api.brevo.com/v3/smtp/email";
 
+/**
+ * Logo en tête des courriels, servi par le site. En PNG : beaucoup de messageries n'affichent pas le SVG.
+ * Version pour fond clair, deux fois plus grande que sa taille affichée pour rester nette.
+ */
+export function logoCourriel(site: string): string {
+  return `<p style="margin:0 0 24px"><img src="${site.replace(/\/$/, "")}/logo/sonar-public-logo-clair.png" ` +
+    `width="168" height="32" alt="${NOM}" style="display:block;border:0;height:32px;width:168px"></p>`;
+}
+
 /** Expéditeur par défaut, remplaçable par les variables d'environnement. */
 function expediteur() {
   return {
-    name: process.env.COURRIEL_NOM ?? "Radar des marchés publics",
+    name: process.env.COURRIEL_NOM ?? NOM,
     email: process.env.COURRIEL_ADRESSE ?? "alertes@exemple.fr",
   };
 }

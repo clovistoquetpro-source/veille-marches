@@ -410,6 +410,7 @@ describe.skipIf(!locale)("connexion par mot de passe", () => {
     const jeton = envoyes[0].texte.match(/connexion\/nouveau\?jeton=([0-9a-f]{64})/)?.[1];
     expect(jeton).toBeDefined();
     expect(envoyes[0].html).toContain(`${site}/connexion/nouveau?jeton=${jeton}`);
+    expect(envoyes[0].html).toContain(`<img src="${site}/logo/sonar-public-logo-clair.png"`);
     // la base ne garde que l'empreinte du jeton
     expect(await sql`select 1 from reinitialisations where jeton_hash = ${jeton!}`).toHaveLength(0);
     expect(await lienValable(sql, jeton!)).toBe(true);

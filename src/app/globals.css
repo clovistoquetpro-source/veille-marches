@@ -26,6 +26,30 @@ body {
 }
 
 /*
+ * Charte Sonar Public. Couleurs du thème sombre, utilisables en classes (text-texte-doux, bg-accent/10…).
+ * accent (pervenche) se dose : le point du sonar, un lien actif, un chiffre clé.
+ */
+@theme {
+  --color-fond: #0b0b0f;
+  --color-fond-carte: #1c1a26;
+  --color-abysse: #02082e;
+  --color-texte: #f4f4f6;
+  --color-texte-doux: #a3a3b2;
+  --color-accent: #8b9bff;
+  --color-accent-2: #a493ff;
+  --color-reflet: #c8d0ff;
+}
+
+/* Sora pour les grands titres ; le reste garde la police de la page (Manrope sur le nouveau design) */
+@layer base {
+  h1,
+  h2,
+  .police-titre {
+    font-family: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
+  }
+}
+
+/*
  * Nouveau design (fond sombre, verre dépoli, sphère liquide) : accueil de l'inscription et connexion.
  * Toutes les transitions partagent la même courbe, lente au départ de l'arrêt : c'est elle qui donne
  * l'impression de fluidité.

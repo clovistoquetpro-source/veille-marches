@@ -20,7 +20,7 @@ export function Questions({ questions }: { questions: { question: string; repons
           </button>
           <div id={`${id}-${i}`} className={`depliant ${ouverte === i ? "ouvert" : ""}`}>
             <div>
-              <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-[#a3a3b2]">{q.reponse}</p>
+              <p className="max-w-2xl pb-6 text-[15px] leading-relaxed text-texte-doux">{q.reponse}</p>
             </div>
           </div>
         </li>
