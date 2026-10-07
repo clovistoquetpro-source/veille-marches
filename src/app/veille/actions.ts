@@ -17,7 +17,7 @@ function liste(valeur: FormDataEntryValue | null): string[] {
 
 export type EtatProfil = { message?: string; erreur?: string };
 
-const FREQUENCES = ["quotidienne", "hebdomadaire", "aucune"] as const;
+const FREQUENCES = ["en_continu", "quotidienne", "hebdomadaire", "aucune"] as const;
 
 /** Enregistre le profil corrigé par le client. */
 export async function actionProfil(_etat: EtatProfil, formulaire: FormData): Promise<EtatProfil> {

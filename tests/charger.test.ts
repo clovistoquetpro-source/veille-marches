@@ -489,6 +489,13 @@ describe.skipIf(!locale)("alertes par courriel", () => {
     expect(quotidien).not.toContain("vide@exemple.fr");
   });
 
+  it("prévient en continu ceux qui veulent les offres dès qu'elles sortent", async () => {
+    await sql`update profils set frequence = 'en_continu' where compte_id = (select id from comptes where email = 'alerte@exemple.fr')`;
+    expect((await destinataires(sql, "en_continu")).map((d) => d.email)).toEqual(["alerte@exemple.fr"]);
+    expect((await destinataires(sql, "hebdomadaire")).map((d) => d.email)).toEqual([]);
+    await sql`update profils set frequence = 'hebdomadaire' where compte_id = (select id from comptes where email = 'alerte@exemple.fr')`;
+  });
+
   it("envoie une alerte, puis ne répète pas ce qui a déjà été annoncé", async () => {
     const premier = await envoyerAlertes(sql, envoyeur, "hebdomadaire");
     expect(premier).toEqual({ envoyees: 1, erreurs: 0, sansNouveaute: 0 });

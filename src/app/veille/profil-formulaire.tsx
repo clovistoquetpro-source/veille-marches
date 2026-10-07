@@ -60,7 +60,8 @@ export function PanneauProfil({ profil, ouvert }: { profil: Profil; ouvert: bool
         <label className="block">
           <span className="font-medium">Alertes par courriel</span>
           <select name="frequence" defaultValue={profil.frequence ?? "quotidienne"} className="mt-1 block rounded border px-3 py-2">
-            <option value="quotidienne">Chaque matin</option>
+            <option value="en_continu">Dès qu&apos;une offre sort (vérifié toutes les 2 h en journée)</option>
+            <option value="quotidienne">Chaque matin à 7 h</option>
             <option value="hebdomadaire">Une fois par semaine, le lundi</option>
             <option value="aucune">Aucune alerte</option>
           </select>

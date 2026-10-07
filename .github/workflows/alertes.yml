@@ -2,14 +2,19 @@ name: Alertes par courriel
 
 on:
   schedule:
-    # Chaque matin à 6 h 30 UTC, une heure après l'import des avis.
-    - cron: "30 6 * * *"
-    # Le lundi à 7 h UTC pour ceux qui ont choisi une alerte hebdomadaire.
-    - cron: "0 7 * * 1"
+    # Envoi du matin à 7 h, heure de Paris (quotidien, et hebdomadaire le lundi). GitHub ne connaît que
+    # l'heure UTC : on programme 5 h et 6 h UTC, l'étape d'envoi ne part qu'à partir de 7 h à Paris
+    # et une seule fois par jour, ce qui couvre l'heure d'été, l'heure d'hiver et les retards de GitHub.
+    - cron: "0 5 * * *"
+    - cron: "0 6 * * *"
+  # Après chaque import des avis réussi : alertes « dès qu'une offre sort ».
+  workflow_run:
+    workflows: ["Import des avis BOAMP et TED"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       frequence:
-        description: "quotidienne (défaut) ou hebdomadaire"
+        description: "quotidienne (défaut), hebdomadaire ou en_continu"
         required: false
 
 concurrency:
@@ -29,7 +34,13 @@ jobs:
       - name: Vérifier que la base et l'envoi de courriels sont configurés
         id: config
         run: |
-          if [ -z "$DATABASE_URL" ] || [ -z "$BREVO_API_KEY" ]; then
+          if [ "${{ github.event_name }}" = "workflow_run" ] && [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Import des avis en échec : pas d'alerte en continu cette fois."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "schedule" ] && [ "$(TZ=Europe/Paris date +%-H)" -lt 7 ]; then
+            echo "Il n'est pas encore 7 h à Paris : l'envoi du matin partira au prochain déclenchement."
+            echo "pret=false" >> "$GITHUB_OUTPUT"
+          elif [ -z "$DATABASE_URL" ] || [ -z "$BREVO_API_KEY" ]; then
             echo "Secrets DATABASE_URL ou BREVO_API_KEY absents : alertes ignorées."
             echo "pret=false" >> "$GITHUB_OUTPUT"
           else
@@ -46,10 +57,20 @@ jobs:
         if: steps.config.outputs.pret == 'true'
       - name: Envoyer les alertes
         if: steps.config.outputs.pret == 'true'
-        # le déclenchement du lundi 7 h est l'envoi hebdomadaire, les autres sont quotidiens
+        env:
+          FREQUENCE: ${{ inputs.frequence }}
         run: |
-          FREQUENCE="${{ inputs.frequence }}"
-          if [ -z "$FREQUENCE" ] && [ "${{ github.event.schedule }}" = "0 7 * * 1" ]; then
-            FREQUENCE=hebdomadaire
-          fi
-          npm run alertes -- --frequence "${FREQUENCE:-quotidienne}"
+          case "${{ github.event_name }}" in
+            workflow_run)
+              npm run alertes -- --frequence en_continu
+              ;;
+            schedule)
+              npm run alertes -- --frequence quotidienne --une-fois-par-jour
+              if [ "$(TZ=Europe/Paris date +%u)" = 1 ]; then
+                npm run alertes -- --frequence hebdomadaire --une-fois-par-jour
+              fi
+              ;;
+            *)
+              npm run alertes -- --frequence "${FREQUENCE:-quotidienne}"
+              ;;
+          esac

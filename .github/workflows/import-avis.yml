@@ -2,8 +2,10 @@ name: Import des avis BOAMP et TED
 
 on:
   schedule:
-    # Chaque matin à 5 h 30 UTC : les avis de la veille sont publiés au plus tard dans la nuit.
-    - cron: "30 5 * * *"
+    # Toutes les 2 h de 4 h 15 à 18 h 15 UTC : TED publie une édition par jour tôt le matin, mais le
+    # BOAMP publie tout au long de la journée (de 6 h à 16 h environ, heure de Paris). Chaque import
+    # déclenche les alertes « dès qu'une offre sort » (workflow Alertes par courriel).
+    - cron: "15 4-18/2 * * *"
   workflow_dispatch:
     inputs:
       depuis:
