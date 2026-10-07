@@ -3,12 +3,10 @@
  * sphère liquide au centre. Elle reste en place d'une page à l'autre, seule la partie centrale change.
  * L'en-tête et le pied ont la même hauteur : le centre de la partie centrale est celui de la sphère.
  */
-import { Manrope } from "next/font/google";
 import Link from "next/link";
 import { SphereLiquide } from "@/components/sphere-liquide";
+import { manrope } from "@/lib/polices";
 import { NOM } from "@/lib/produit";
-
-const manrope = Manrope({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
 
 export default function LayoutScene({ children }: { children: React.ReactNode }) {
   return (
