@@ -49,6 +49,17 @@ départements (vide = toute la France). Un avis correspond quand son code CPV co
 préfixes **ou** que son objet contient l'un des mots-clés, et qu'il s'exécute dans l'un des
 départements suivis. Les mêmes règles serviront aux alertes par courriel.
 
+## Préparer une candidature
+
+Depuis un appel d'offres, `/candidature/<avis>` donne :
+
+- les formulaires DC1 et DC2 en Word, pré-remplis avec l'avis et l'annuaire des entreprises (sans IA) ;
+- l'analyse « on y va ou pas » du dossier : le client dépose les PDF (RC, CCAP, CCTP), le site les
+  transmet tels quels à l'API Files d'Anthropic, puis Claude rend un verdict structuré (clé
+  `ANTHROPIC_API_KEY`, modèle `MODELE_ANALYSE`, Sonnet par défaut). `ANALYSES_PAR_MOIS` analyses par
+  compte et par mois (`src/lib/produit.ts`). Les fichiers sont effacés après l'analyse. En local,
+  `ANTHROPIC_BASE_URL` peut pointer vers une fausse API.
+
 Il se connecte ensuite sur `/connexion` avec son adresse et son mot de passe. On ne garde que l'empreinte
 PBKDF2 salée du mot de passe (100 000 itérations, le plafond de Cloudflare Workers) ; au cinquième essai
 raté d'affilée, la connexion est bloquée un quart d'heure. « Mot de passe oublié » envoie par Brevo un

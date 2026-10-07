@@ -5,7 +5,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 function reponseOutil(input: unknown) {
   const appel = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-    content: [{ type: "tool_use", name: "profil_de_veille", input }],
+    stop_reason: "end_turn",
+    content: [{ type: "thinking", thinking: "" }, { type: "text", text: JSON.stringify(input) }],
   })));
   vi.stubGlobal("fetch", appel);
   return appel;
@@ -20,7 +21,9 @@ describe("profil déduit par l'IA", () => {
       cpv: ["45421000", "44220000"], mots_cles: ["menuiserie", "fenêtre"], departements: [], origine: "ia",
     });
     const requete = JSON.parse(appel.mock.calls[0][1].body);
-    expect(requete.tool_choice).toEqual({ type: "tool", name: "profil_de_veille" });
+    // les modèles récents refusent un appel d'outil forcé : on demande une réponse JSON
+    expect(requete.tool_choice).toBeUndefined();
+    expect(requete.output_config.format.type).toBe("json_schema");
     expect(requete.messages[0].content).toContain("Travaux de menuiserie bois et PVC");
   });
 

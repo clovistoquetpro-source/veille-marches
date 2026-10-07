@@ -11,6 +11,9 @@ export const BASELINE = "Les marchés publics de l'an prochain, dès aujourd'hui
 /** Abonnement mensuel, en euros hors taxes. */
 export const PRIX_MENSUEL = 29;
 
+/** Analyses « on y va ou pas » d'un dossier par l'IA, comprises dans l'abonnement chaque mois. */
+export const ANALYSES_PAR_MOIS = 10;
+
 /** Jours d'essai gratuit avant le premier prélèvement. */
 export const JOURS_ESSAI = 14;
 

@@ -3,10 +3,14 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Section } from "@/components/fiche";
 import { LienAcheteur } from "@/components/liens";
+import { abonnementDuCompte, accesOuvert } from "@/lib/abonnements";
+import { analysesDeLAvis, analysesRestantes, FICHIERS_MAX, TAILLE_MAX_FICHIER, VERDICTS } from "@/lib/analyse";
 import { avisPourCandidature, candidatDuCompte, PAGE_OFFICIELLE, referenceAvis } from "@/lib/candidature";
 import { compteDeLaSession, COOKIE_SESSION } from "@/lib/comptes";
 import { db } from "@/lib/db";
 import { euros, jour } from "@/lib/format";
+import { ANALYSES_PAR_MOIS } from "@/lib/produit";
+import { AnalyseDossier } from "./analyse-dossier";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Préparer ma candidature" };
@@ -32,11 +36,16 @@ export default async function PageCandidature({ params }: Props) {
     if (!compte) return "connexion" as const;
     const avis = await avisPourCandidature(sql, uid);
     if (!avis) return null;
-    return { compte, avis, candidat: await candidatDuCompte(sql, compte) };
+    const [candidat, abonnement, restantes, analyses] = await Promise.all([
+      candidatDuCompte(sql, compte), abonnementDuCompte(sql, compte.id),
+      analysesRestantes(sql, compte.id), analysesDeLAvis(sql, compte.id, avis.uid),
+    ]);
+    return { compte, avis, candidat, acces: accesOuvert(abonnement), restantes, analyses };
   })().finally(() => sql.end());
   if (donnees === "connexion") redirect("/connexion");
   if (!donnees) notFound();
-  const { avis, candidat } = donnees;
+  const { avis, candidat, acces, restantes, analyses } = donnees;
+  const iaActivee = Boolean(process.env.ANTHROPIC_API_KEY);
   const aujourdhui = new Date().toISOString().slice(0, 10);
   const depasse = avis.date_limite !== null && avis.date_limite < aujourdhui;
   const adresse = [candidat.adresse, candidat.adresse_siege && `Siège social : ${candidat.adresse_siege}`].filter(Boolean).join("\n");
@@ -100,6 +109,47 @@ export default async function PageCandidature({ params }: Props) {
             <a href={PAGE_OFFICIELLE} target="_blank" rel="noreferrer" className="underline">Modèles officiels et notices</a>.
           </p>
         </form>
+      </Section>
+
+      <Section titre="Faut-il y aller ? L'avis de l'IA sur le dossier">
+        <p className="text-sm text-gray-700">
+          Déposez le dossier de consultation téléchargé sur le site de l&apos;acheteur. L&apos;IA le lit avec ce que nous savons
+          de votre entreprise et vous dit si ça vaut le coup : conditions éliminatoires, pièces à fournir, critères de choix,
+          dates à ne pas manquer.
+        </p>
+        <div className="mt-4">
+          {!iaActivee ? (
+            <p className="text-sm text-gray-500">L&apos;analyse des dossiers sera bientôt disponible.</p>
+          ) : !acces ? (
+            <p className="text-sm text-amber-900">
+              Votre essai est terminé. <Link href="/abonnement" className="underline">Reprenez l&apos;abonnement</Link> pour analyser un dossier.
+            </p>
+          ) : restantes === 0 ? (
+            <p className="text-sm text-gray-700">
+              Vous avez utilisé vos {ANALYSES_PAR_MOIS} analyses de ce mois-ci. Le compteur repart à zéro le 1er du mois.
+            </p>
+          ) : (
+            <>
+              <AnalyseDossier uid={avis.uid} tailleMax={TAILLE_MAX_FICHIER} fichiersMax={FICHIERS_MAX} />
+              <p className="mt-2 text-xs text-gray-500">
+                Il vous reste {restantes} analyse{restantes > 1 ? "s" : ""} sur {ANALYSES_PAR_MOIS} ce mois-ci. Vos fichiers sont
+                effacés dès la fin de l&apos;analyse. L&apos;IA peut se tromper : vérifiez dans le dossier avant de décider.
+              </p>
+            </>
+          )}
+        </div>
+        {analyses.length > 0 && (
+          <ul className="mt-4 divide-y border-t text-sm">
+            {analyses.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <Link href={`/analyses/${a.id}`} className="underline">Analyse du {jour(a.cree_le)}</Link>
+                <span className={`rounded border px-2 py-0.5 text-xs ${VERDICTS[a.resultat.verdict].couleur}`}>
+                  {VERDICTS[a.resultat.verdict].titre}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </Section>
 
       <Section titre="Ce que nous mettons dans vos formulaires">
