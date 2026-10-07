@@ -97,6 +97,9 @@ export default async function PageVeille() {
                     <span className="block text-xs text-gray-500">
                       {[a.departements.join(", "), a.cpv && `CPV ${a.cpv}`].filter(Boolean).join(" · ")}
                     </span>
+                    <Link href={`/candidature/${encodeURIComponent(a.uid)}`} className="mt-1 inline-block text-xs underline">
+                      Préparer mes DC1 et DC2
+                    </Link>
                   </td>
                   <td className="py-2 pr-3">{a.acheteur_nom ?? "Acheteur non publié"}</td>
                   <td className="py-2 whitespace-nowrap">{jour(a.date_limite)}</td>

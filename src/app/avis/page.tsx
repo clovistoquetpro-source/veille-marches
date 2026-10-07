@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ListeTitulaires, LienAcheteur } from "@/components/liens";
 import { Sources } from "@/components/sources";
 import { listerAvis } from "@/lib/avis";
@@ -79,6 +80,11 @@ export default async function PageAvis({ searchParams }: Props) {
                 <span className="block text-xs text-gray-500">
                   {[type === "" && libelleTypeAvis(a.type), a.departements.join(", "), a.cpv && `CPV ${a.cpv}`].filter(Boolean).join(" · ")}
                 </span>
+                {a.type === "marche" && (
+                  <Link href={`/candidature/${encodeURIComponent(a.uid)}`} className="mt-1 inline-block text-xs underline">
+                    Préparer mes DC1 et DC2
+                  </Link>
+                )}
               </td>
               <td className="py-2 pr-3"><LienAcheteur siret={a.acheteur_siret} nom={a.acheteur_nom} /></td>
               <td className="py-2 pr-3 whitespace-nowrap">

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { chercherEntreprise, INDISPONIBLE } from "../src/lib/annuaire";
+import { chercherEntreprise, chercherIdentite, INDISPONIBLE } from "../src/lib/annuaire";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -60,5 +60,25 @@ describe("annuaire des entreprises", () => {
     vi.stubGlobal("fetch", appels);
     expect(await chercherEntreprise("482818523", 2)).toMatchObject({ nom: "HTP CENTRE EST" });
     expect(appels).toHaveBeenCalledTimes(2);
+  });
+
+  it("donne l'identité complète pour les formulaires de candidature", async () => {
+    reponse({ results: [{
+      ...REPONSE.results[0],
+      nom_raison_sociale: "HTP CENTRE EST",
+      nature_juridique: "5710",
+      categorie_entreprise: "PME",
+      tranche_effectif_salarie: "12",
+      date_creation: "2005-03-01",
+      finances: { "2023": { ca: 2100000, resultat_net: 1 }, "2024": { ca: 2400000, resultat_net: 2 }, "2022": { ca: null }, "2025": { ca: 0, resultat_net: 3 } },
+      siege: { ...REPONSE.results[0].siege, adresse: "3 RUE DES ECOLES 69120 VAULX-EN-VELIN" },
+      matching_etablissements: [{ ...REPONSE.results[0].matching_etablissements[0], adresse: "12 RUE DU PORT 01000 BOURG-EN-BRESSE", nom_commercial: "HTP PROPRETE" }],
+    }] });
+    expect(await chercherIdentite("48281852300037")).toEqual({
+      siren: "482818523", siret: "48281852300037", nom: "HTP CENTRE EST", enseigne: "HTP PROPRETE",
+      adresse: "12 RUE DU PORT 01000 BOURG-EN-BRESSE", adresse_siege: "3 RUE DES ECOLES 69120 VAULX-EN-VELIN",
+      categorie_juridique: "5710", categorie: "PME", naf: "81.22Z", tranche_effectif: "12", date_creation: "2005-03-01",
+      chiffres_affaires: [{ annee: "2024", ca: 2400000 }, { annee: "2023", ca: 2100000 }],
+    });
   });
 });
